@@ -290,6 +290,22 @@ export default function ProfilePage() {
           <span>⇄</span>
           Cambiar usuario
         </button>
+
+        <button
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            window.location.href = "/entrar";
+          }}
+          style={{
+            width: "100%", marginTop: 10, padding: "14px", borderRadius: 14,
+            background: "transparent", border: "1px solid rgba(255,255,255,0.12)",
+            color: "rgba(255,255,255,0.45)", fontSize: 14, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}
+        >
+          <span>🔒</span>
+          Cerrar sesión
+        </button>
       </div>
 
       <BottomNav />

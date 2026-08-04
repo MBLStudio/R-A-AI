@@ -105,6 +105,47 @@ export default function HomePage() {
           </p>
         </motion.div>
 
+        {/* Proyecto Barcelona */}
+        <motion.button
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.4 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => router.push(`/${userParam}/barcelona`)}
+          style={{
+            width: "100%", marginBottom: 24, border: "none", cursor: "pointer", textAlign: "left",
+            borderRadius: 24, padding: "22px 24px", position: "relative", overflow: "hidden",
+            background: "linear-gradient(140deg, #8E3A20 0%, #C1502E 48%, #E8A33D 100%)",
+            boxShadow: "0 8px 30px rgba(193,80,46,0.32)",
+          }}
+        >
+          {/* Trencadís */}
+          <svg viewBox="0 0 110 100" preserveAspectRatio="xMidYMid slice"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} aria-hidden>
+            {[
+              { x: 8, y: 12, w: 26, h: 20, r: -12, o: 0.1 },
+              { x: 46, y: 32, w: 34, h: 16, r: 8, o: 0.07 },
+              { x: 80, y: 8, w: 20, h: 26, r: 22, o: 0.09 },
+              { x: 22, y: 56, w: 30, h: 22, r: 16, o: 0.06 },
+              { x: 64, y: 66, w: 24, h: 18, r: -18, o: 0.08 },
+            ].map((p, i) => (
+              <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} rx={3} fill="white" opacity={p.o}
+                transform={`rotate(${p.r} ${p.x + p.w / 2} ${p.y + p.h / 2})`} />
+            ))}
+          </svg>
+
+          <div style={{ position: "relative" }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.14em", margin: "0 0 8px" }}>
+              🇪🇸 Proyecto Barcelona
+            </p>
+            <p style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontSize: 27, fontWeight: 400, color: "white", margin: 0, lineHeight: 1.12, letterSpacing: "-0.4px" }}>
+              Catalanes por<br />una temporada
+            </p>
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", margin: "9px 0 0", lineHeight: 1.5, maxWidth: 300 }}>
+              Vuestra etapa: dónde vivís, qué descubrís y cómo lo recordaréis.
+            </p>
+          </div>
+        </motion.button>
+
         {/* Con Rut / Con Alejandro */}
         <section style={{ marginBottom: 24 }}>
           <SectionLabel text={isAlejandro ? "Con Rut" : "Con Alejandro"} />
