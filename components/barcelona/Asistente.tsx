@@ -185,10 +185,10 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
                 </button>
                 <div style={{ minWidth: 0 }}>
                   <p style={{ fontSize: 15.5, fontWeight: 700, color: "white", margin: 0 }}>
-                    Vuestro asistente
+                    Olmo
                   </p>
                   <p style={{ fontSize: 11.5, color: "rgba(255,255,255,0.6)", margin: "1px 0 0" }}>
-                    Lo sabe todo del Proyecto Barcelona
+                    Vuestro guía en Barcelona
                   </p>
                 </div>
 
@@ -222,12 +222,11 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
                         }}
                       />
                     )}
-                    <p style={{ fontSize: 15, fontWeight: 600, color: BCN.tinta, margin: "0 0 5px", textAlign: "center" }}>
-                      Hola{usuario === "rut" ? " Rut" : " Alejandro"} 👋
+                    <p style={{ fontFamily: "Georgia, serif", fontSize: 21, color: BCN.tinta, margin: "0 0 6px", textAlign: "center" }}>
+                      Soy Olmo
                     </p>
-                    <p style={{ fontSize: 13.5, color: BCN.humo, margin: "0 0 18px", lineHeight: 1.6, textAlign: "center" }}>
-                      Conozco vuestros barrios, planes, pisos y momentos.
-                      <br />Preguntadme lo que sea.
+                    <p style={{ fontSize: 14, color: BCN.humo, margin: "0 0 18px", lineHeight: 1.6, textAlign: "center" }}>
+                      ¿Qué buscamos hoy?
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                       {SUGERENCIAS.map((s, i) => (
