@@ -15,21 +15,15 @@ interface Message {
   image_url?: string;
 }
 
-const SHARED_MODULES = ["plans", "italian", "chat", "viajes"];
+const SHARED_MODULES = ["plans", "viajes"];
 
 const MODULE_TITLES: Record<string, { title: string; icon: string }> = {
-  outfits: { title: "Outfits", icon: "👔" },
   comidas: { title: "Comidas", icon: "🥗" },
-  posts: { title: "Posts", icon: "📱" },
-  psicologo: { title: "Psicólogo", icon: "🧘" },
   prompts: { title: "Prompts", icon: "✍️" },
   automatizaciones: { title: "Automatizaciones", icon: "⚙️" },
   proyectos: { title: "Proyectos", icon: "🚀" },
   tfg: { title: "TFG Psicología", icon: "🎓" },
-  estudios: { title: "Estudios", icon: "📚" },
   plans: { title: "Planes de pareja", icon: "💑" },
-  italian: { title: "Italiano", icon: "🇮🇹" },
-  chat: { title: "Chat libre R&A", icon: "💬" },
   viajes: { title: "Viajes", icon: "🌍" },
 };
 

@@ -333,7 +333,6 @@ export default function RutPage() {
       }}>
         {[
           { icon: "⊞", label: "Inicio", href: `/${userParam}` },
-          { icon: "💬", label: "Chat", href: `/${userParam}/chat` },
           { icon: "👤", label: "Perfil", href: `/${userParam}/profile` },
         ].map((item) => (
           <button key={item.href} onClick={() => router.push(item.href)}

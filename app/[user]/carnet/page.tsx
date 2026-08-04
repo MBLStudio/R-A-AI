@@ -1,20 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { getBothProfiles, upsertProfile, type UserProfile } from "@/lib/profiles";
 import { uploadPhoto } from "@/lib/upload";
-import {
-  getSaldos, getHistorial, getAcciones, aplicarAccion, addAccion, deleteAccion,
-  type PuntosAccion, type PuntosHistorial,
-} from "@/lib/puntos";
 
 const COUPLE_DATE = "2026-01-30";
 const MEET_DATE   = "2025-11-14";
 const ORANGE      = "#ea580c";
-const MAX         = 30;
 
 function daysSince(d: string | null) {
   if (!d) return 0;
@@ -33,17 +28,6 @@ function breakdown(d: string | null) {
 function fmtShort(iso: string) {
   return new Date(iso).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
-function fmtHist(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" }) + " · " +
-    d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
-}
-
-const TIPO_CFG = {
-  ganar:     { color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0", label: "GANAR",     icon: "⬆️" },
-  perder:    { color: "#dc2626", bg: "#fef2f2", border: "#fecaca", label: "PERDER",    icon: "⬇️" },
-  recuperar: { color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe", label: "RECUPERAR", icon: "🔄" },
-};
 
 const BADGES: Record<string, { icon: string; label: string }[]> = {
   alejandro: [
@@ -68,7 +52,6 @@ const PODER: Record<string, string> = {
 export default function CarnetPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { activeUser, setUser } = useUserStore();
   const user = params.user as UserName;
   useEffect(() => { if (user !== activeUser) setUser(user, user); }, [user]);
@@ -77,9 +60,6 @@ export default function CarnetPage() {
   const myName     = isAle ? "Alejandro" : "Rut";
   const otherName  = isAle ? "Rut" : "Alejandro";
   const otherUser  = isAle ? "rut" : "alejandro";
-
-  const initialTab = searchParams.get("tab") === "puntos" ? "puntos" : "carnets";
-  const [tab, setTab] = useState<"carnets" | "puntos">(initialTab);
 
   // ── Carnets state ──
   const [profiles,  setProfiles]  = useState<{ alejandro: UserProfile | null; rut: UserProfile | null }>({ alejandro: null, rut: null });
@@ -91,22 +71,6 @@ export default function CarnetPage() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // ── Puntos state ──
-  const [saldos,    setSaldos]    = useState({ alejandro: 0, rut: 0 });
-  const [historial, setHistorial] = useState<PuntosHistorial[]>([]);
-  const [acciones,  setAcciones]  = useState<PuntosAccion[]>([]);
-  const [loadingP,  setLoadingP]  = useState(true);
-  const [subTab,    setSubTab]    = useState<"aplicar" | "historial" | "lista">("aplicar");
-  const [selected,  setSelected]  = useState<PuntosAccion | null>(null);
-  const [target,    setTarget]    = useState(user);
-  const [applying,  setApplying]  = useState(false);
-  const [flash,     setFlash]     = useState<{ msg: string; ok: boolean } | null>(null);
-  const [showForm,  setShowForm]  = useState(false);
-  const [formText,  setFormText]  = useState("");
-  const [formValor, setFormValor] = useState("1");
-  const [formTipo,  setFormTipo]  = useState<"ganar" | "perder" | "recuperar">("ganar");
-  const [savingP,   setSavingP]   = useState(false);
-
   useEffect(() => {
     getBothProfiles().then((p) => {
       setProfiles(p); setLoadingC(false);
@@ -116,19 +80,11 @@ export default function CarnetPage() {
     });
   }, [user]);
 
-  const loadPuntos = async () => {
-    const [s, h, a] = await Promise.all([getSaldos(), getHistorial(), getAcciones()]);
-    setSaldos(s); setHistorial(h); setAcciones(a); setLoadingP(false);
-  };
-  useEffect(() => { loadPuntos(); }, []);
-
-  const mine        = isAle ? profiles.alejandro : profiles.rut;
-  const other       = isAle ? profiles.rut : profiles.alejandro;
-  const fi          = mine?.fecha_inicio ?? other?.fecha_inicio ?? COUPLE_DATE;
-  const days        = daysSince(fi);
-  const bd          = breakdown(fi);
-  const myPuntos    = isAle ? saldos.alejandro : saldos.rut;
-  const otherPuntos = isAle ? saldos.rut : saldos.alejandro;
+  const mine  = isAle ? profiles.alejandro : profiles.rut;
+  const other = isAle ? profiles.rut : profiles.alejandro;
+  const fi    = mine?.fecha_inicio ?? other?.fecha_inicio ?? COUPLE_DATE;
+  const days  = daysSince(fi);
+  const bd    = breakdown(fi);
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -147,25 +103,6 @@ export default function CarnetPage() {
     setEditing(false); setSavingC(false);
   };
 
-  const handleApply = async () => {
-    if (!selected) return;
-    setApplying(true);
-    await aplicarAccion(otherUser, user, selected);
-    await loadPuntos();
-    setFlash({ msg: `${selected.valor > 0 ? "+" : ""}${selected.valor} pts para ${otherName} · ${selected.texto}`, ok: selected.valor > 0 });
-    setTimeout(() => setFlash(null), 3000);
-    setSelected(null); setApplying(false);
-  };
-
-  const handleAddAccion = async () => {
-    if (!formText.trim()) return;
-    setSavingP(true);
-    const val = parseInt(formValor) || 1;
-    await addAccion(formText.trim(), formTipo === "perder" ? -Math.abs(val) : Math.abs(val), formTipo);
-    await loadPuntos();
-    setFormText(""); setFormValor("1"); setShowForm(false); setSavingP(false);
-  };
-
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "#f9fafb", overflow: "hidden" }}>
 
@@ -181,241 +118,43 @@ export default function CarnetPage() {
             <h1 style={{ fontSize: 20, fontWeight: 700, color: "#111827", margin: 0 }}>R&A 💕</h1>
             <p style={{ fontSize: 11, color: "#9ca3af", margin: 0 }}>{days.toLocaleString("es-ES")} días juntos</p>
           </div>
-          {tab === "carnets" && (
-            <button onClick={() => setEditing(true)}
-              style={{ padding: "7px 14px", background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 20, color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              Editar
-            </button>
-          )}
-        </div>
-
-        {/* Tab switcher */}
-        <div style={{ display: "flex", gap: 0, marginTop: 12, background: "#f3f4f6", borderRadius: 10, padding: 3 }}>
-          {(["carnets", "puntos"] as const).map((t) => (
-            <button key={t} onClick={() => setTab(t)}
-              style={{ flex: 1, padding: "8px", background: tab === t ? "white" : "transparent", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, color: tab === t ? "#111827" : "#9ca3af", cursor: "pointer", boxShadow: tab === t ? "0 1px 3px rgba(0,0,0,0.1)" : "none", transition: "all 0.15s" }}>
-              {t === "carnets" ? "💕 Carnets" : "⚡ Puntos"}
-            </button>
-          ))}
+          <button onClick={() => setEditing(true)}
+            style={{ padding: "7px 14px", background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 20, color: "#374151", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            Editar
+          </button>
         </div>
       </motion.div>
 
-      {/* ══ CARNETS TAB ══ */}
-      {tab === "carnets" && (
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px", paddingBottom: "calc(32px + env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", gap: 28 }}>
-          {loadingC ? (
-            <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", marginTop: 80 }}>Cargando…</p>
-          ) : (
-            <>
-              <DNICard
-                name="Alejandro" status="NOVIO OFICIAL"
-                photoUrl={isAle ? mine?.photo_url ?? null : other?.photo_url ?? null}
-                apodo={isAle ? mine?.apodo ?? null : other?.apodo ?? null}
-                cardId="R&A-001" accentColor={ORANGE}
-                isMine={isAle} uploading={isAle ? uploading : false}
-                onPhoto={isAle ? () => fileRef.current?.click() : () => {}}
-                badges={BADGES.alejandro} poder={PODER.alejandro} bd={bd} delay={0.05}
-              />
-              <DNICard
-                name="Rut" status="NOVIA OFICIAL"
-                photoUrl={isAle ? other?.photo_url ?? null : mine?.photo_url ?? null}
-                apodo={isAle ? other?.apodo ?? null : mine?.apodo ?? null}
-                cardId="R&A-002" accentColor={ORANGE}
-                isMine={!isAle} uploading={!isAle ? uploading : false}
-                onPhoto={!isAle ? () => fileRef.current?.click() : () => {}}
-                badges={BADGES.rut} poder={PODER.rut} bd={bd} delay={0.13}
-              />
-              <input ref={fileRef} id="ra-photo-input" type="file" accept="image/*"
-                style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
-                onChange={handlePhoto} />
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ══ PUNTOS TAB ══ */}
-      {tab === "puntos" && (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-          {/* Flash */}
-          <AnimatePresence>
-            {flash && (
-              <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                style={{ margin: "10px 16px 0", padding: "10px 14px", borderRadius: 10, background: flash.ok ? "#f0fdf4" : "#fef2f2", border: `1px solid ${flash.ok ? "#bbf7d0" : "#fecaca"}`, textAlign: "center", flexShrink: 0 }}>
-                <p style={{ fontSize: 13, fontWeight: 700, color: flash.ok ? "#16a34a" : "#dc2626", margin: 0 }}>{flash.msg}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Score cards */}
-          <div style={{ padding: "12px 16px 0", display: "flex", gap: 10, flexShrink: 0 }}>
-            {[{ name: myName, puntos: myPuntos, isMe: true }, { name: otherName, puntos: otherPuntos, isMe: false }].map(({ name, puntos, isMe }) => {
-              const capped = Math.min(puntos, MAX);
-              const bonus  = Math.max(0, puntos - MAX);
-              return (
-                <motion.div key={name} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: isMe ? 0.05 : 0.1 }}
-                  style={{ flex: 1, background: "white", borderRadius: 14, padding: 14, border: isMe ? `2px solid ${ORANGE}30` : "1px solid #e5e7eb", boxShadow: isMe ? `0 2px 12px ${ORANGE}15` : "0 1px 4px rgba(0,0,0,0.04)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: "#374151", margin: 0 }}>{name}</p>
-                    {isMe && <span style={{ fontSize: 9, fontWeight: 800, color: ORANGE, background: `${ORANGE}15`, padding: "2px 7px", borderRadius: 8 }}>TÚ</span>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginBottom: 8 }}>
-                    <span style={{ fontSize: 30, fontWeight: 900, color: "#111827", lineHeight: 1 }}>{capped}</span>
-                    <span style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>/ {MAX}</span>
-                    {bonus > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: ORANGE, background: `${ORANGE}15`, padding: "1px 6px", borderRadius: 8, marginLeft: 4 }}>+{bonus}</span>}
-                  </div>
-                  <div style={{ height: 5, background: "#f3f4f6", borderRadius: 3, overflow: "hidden" }}>
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${(capped / MAX) * 100}%` }}
-                      transition={{ type: "spring", stiffness: 100, damping: 20, delay: 0.2 }}
-                      style={{ height: "100%", background: `linear-gradient(90deg, ${ORANGE}, #f97316)`, borderRadius: 3 }} />
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-
-          {/* Sub-tabs */}
-          <div style={{ display: "flex", gap: 0, margin: "10px 16px 0", background: "#f3f4f6", borderRadius: 10, padding: 3, flexShrink: 0 }}>
-            {(["aplicar", "historial", "lista"] as const).map((t) => (
-              <button key={t} onClick={() => setSubTab(t)}
-                style={{ flex: 1, padding: "7px 4px", background: subTab === t ? "white" : "transparent", border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700, color: subTab === t ? "#111827" : "#9ca3af", cursor: "pointer", boxShadow: subTab === t ? "0 1px 3px rgba(0,0,0,0.1)" : "none", transition: "all 0.15s" }}>
-                {t === "aplicar" ? "⚡ Aplicar" : t === "historial" ? "📋 Historial" : "⚙️ Lista"}
-              </button>
-            ))}
-          </div>
-
-          {/* Sub-tab content */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", paddingBottom: "calc(24px + env(safe-area-inset-bottom))" }}>
-
-            {/* APLICAR */}
-            {subTab === "aplicar" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {(["ganar", "recuperar", "perder"] as const).map((tipo) => {
-                  const cfg   = TIPO_CFG[tipo];
-                  const lista = acciones.filter((a) => a.tipo === tipo);
-                  if (!lista.length) return null;
-                  return (
-                    <div key={tipo}>
-                      <p style={{ fontSize: 10, fontWeight: 800, color: cfg.color, margin: "0 0 8px", letterSpacing: "0.08em", textTransform: "uppercase" }}>{cfg.icon} {cfg.label} PUNTOS</p>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {lista.map((a) => {
-                          const isSel = selected?.id === a.id;
-                          return (
-                            <div key={a.id}>
-                              <motion.button whileTap={{ scale: 0.98 }}
-                                onClick={() => setSelected(isSel ? null : a)}
-                                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: isSel ? cfg.bg : "white", border: `1.5px solid ${isSel ? cfg.color : "#e5e7eb"}`, borderRadius: 10, cursor: "pointer", textAlign: "left", transition: "all 0.15s" }}>
-                                <span style={{ fontSize: 14, fontWeight: 600, color: "#111827", flex: 1 }}>{a.texto}</span>
-                                <span style={{ fontSize: 13, fontWeight: 800, color: cfg.color, marginLeft: 10 }}>{a.valor > 0 ? "+" : ""}{a.valor} pts</span>
-                              </motion.button>
-                              <AnimatePresence>
-                                {isSel && (
-                                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ overflow: "hidden" }}>
-                                    <div style={{ padding: "10px 14px 14px", background: cfg.bg, borderRadius: "0 0 10px 10px", border: `1.5px solid ${cfg.color}`, borderTop: "none", display: "flex", flexDirection: "column", gap: 10 }}>
-                                      <p style={{ fontSize: 12, color: cfg.color, margin: 0, fontWeight: 600 }}>
-                                        Para <strong>{otherName}</strong>
-                                      </p>
-                                      <motion.button whileTap={{ scale: 0.97 }} onClick={handleApply} disabled={applying}
-                                        style={{ padding: 11, background: cfg.color, border: "none", borderRadius: 10, color: "white", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
-                                        {applying ? "Aplicando…" : `Dar ${a.valor > 0 ? "+" : ""}${a.valor} pts a ${otherName}`}
-                                      </motion.button>
-                                    </div>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* HISTORIAL */}
-            {subTab === "historial" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {!historial.length ? (
-                  <p style={{ textAlign: "center", color: "#9ca3af", fontSize: 14, marginTop: 40 }}>Aún no hay movimientos</p>
-                ) : historial.map((h) => {
-                  const isPos = h.valor > 0;
-                  const tLabel = h.user_name === user ? myName : otherName;
-                  const byLabel = h.applied_by === user ? "tú" : otherName;
-                  return (
-                    <motion.div key={h.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                      style={{ background: "white", borderRadius: 10, padding: "12px 14px", border: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: isPos ? "#f0fdf4" : "#fef2f2", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: isPos ? "#16a34a" : "#dc2626" }}>{isPos ? "+" : ""}{h.valor}</span>
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, color: "#111827", margin: 0 }}>{h.motivo}</p>
-                        <p style={{ fontSize: 11, color: "#9ca3af", margin: "2px 0 0" }}>Para {tLabel} · por {byLabel} · {fmtHist(h.created_at)}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* LISTA */}
-            {subTab === "lista" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {!showForm ? (
-                  <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowForm(true)}
-                    style={{ padding: 12, background: "white", border: `2px dashed ${ORANGE}50`, borderRadius: 12, color: ORANGE, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                    + Nueva acción
-                  </motion.button>
-                ) : (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-                    style={{ background: "white", borderRadius: 12, padding: 16, border: `1px solid ${ORANGE}30` }}>
-                    <p style={{ fontSize: 12, fontWeight: 700, color: ORANGE, margin: "0 0 12px", textTransform: "uppercase" }}>Nueva acción</p>
-                    <input value={formText} onChange={(e) => setFormText(e.target.value)} placeholder="Descripción…"
-                      style={{ width: "100%", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", fontSize: 14, color: "#111827", outline: "none", fontFamily: "inherit", boxSizing: "border-box", marginBottom: 10 }} />
-                    <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                      <select value={formTipo} onChange={(e) => setFormTipo(e.target.value as "ganar" | "perder" | "recuperar")}
-                        style={{ flex: 1, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "9px 10px", fontSize: 13, color: "#111827", outline: "none", fontFamily: "inherit" }}>
-                        <option value="ganar">⬆️ Ganar</option>
-                        <option value="perder">⬇️ Perder</option>
-                        <option value="recuperar">🔄 Recuperar</option>
-                      </select>
-                      <input type="number" min="1" max="10" value={formValor} onChange={(e) => setFormValor(e.target.value)}
-                        style={{ width: 72, background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, padding: "9px 10px", fontSize: 13, color: "#111827", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => setShowForm(false)} style={{ flex: 1, padding: 10, background: "#f3f4f6", border: "none", borderRadius: 8, color: "#6b7280", fontSize: 13, cursor: "pointer" }}>Cancelar</button>
-                      <button onClick={handleAddAccion} disabled={savingP || !formText.trim()} style={{ flex: 2, padding: 10, background: ORANGE, border: "none", borderRadius: 8, color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{savingP ? "Guardando…" : "Añadir"}</button>
-                    </div>
-                  </motion.div>
-                )}
-                {(["ganar", "recuperar", "perder"] as const).map((tipo) => {
-                  const cfg   = TIPO_CFG[tipo];
-                  const lista = acciones.filter((a) => a.tipo === tipo);
-                  if (!lista.length) return null;
-                  return (
-                    <div key={tipo}>
-                      <p style={{ fontSize: 10, fontWeight: 800, color: cfg.color, margin: "0 0 8px", letterSpacing: "0.08em", textTransform: "uppercase" }}>{cfg.icon} {cfg.label}</p>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        {lista.map((a) => (
-                          <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, background: "white", borderRadius: 10, padding: "11px 14px", border: "1px solid #e5e7eb" }}>
-                            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#374151" }}>{a.texto}</span>
-                            <span style={{ fontSize: 12, fontWeight: 800, color: cfg.color, whiteSpace: "nowrap" }}>{a.valor > 0 ? "+" : ""}{a.valor} pts</span>
-                            <button onClick={() => deleteAccion(a.id).then(loadPuntos)}
-                              style={{ width: 28, height: 28, borderRadius: "50%", background: "#fef2f2", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" /></svg>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* ══ CARNETS ══ */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "20px 16px", paddingBottom: "calc(32px + env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", gap: 28 }}>
+        {loadingC ? (
+          <p style={{ color: "#9ca3af", fontSize: 14, textAlign: "center", marginTop: 80 }}>Cargando…</p>
+        ) : (
+          <>
+            <DNICard
+              name="Alejandro" status="NOVIO OFICIAL"
+              photoUrl={isAle ? mine?.photo_url ?? null : other?.photo_url ?? null}
+              apodo={isAle ? mine?.apodo ?? null : other?.apodo ?? null}
+              cardId="R&A-001" accentColor={ORANGE}
+              isMine={isAle} uploading={isAle ? uploading : false}
+              onPhoto={isAle ? () => fileRef.current?.click() : () => {}}
+              badges={BADGES.alejandro} poder={PODER.alejandro} bd={bd} delay={0.05}
+            />
+            <DNICard
+              name="Rut" status="NOVIA OFICIAL"
+              photoUrl={isAle ? other?.photo_url ?? null : mine?.photo_url ?? null}
+              apodo={isAle ? other?.apodo ?? null : mine?.apodo ?? null}
+              cardId="R&A-002" accentColor={ORANGE}
+              isMine={!isAle} uploading={!isAle ? uploading : false}
+              onPhoto={!isAle ? () => fileRef.current?.click() : () => {}}
+              badges={BADGES.rut} poder={PODER.rut} bd={bd} delay={0.13}
+            />
+            <input ref={fileRef} id="ra-photo-input" type="file" accept="image/*"
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }}
+              onChange={handlePhoto} />
+          </>
+        )}
+      </div>
 
       {/* Edit sheet */}
       <AnimatePresence>

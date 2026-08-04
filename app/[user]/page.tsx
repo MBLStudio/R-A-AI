@@ -4,37 +4,24 @@ import { useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { getDailyMessage, getDailyPlan, isFreeDayPlan } from "@/lib/daily-content";
+import { getDailyMessage } from "@/lib/daily-content";
 
 const SHARED_MODULES = [
   { id: "carnet", icon: "💕", title: "Nuestros carnets", description: "Alejandro & Rut · pareja oficial", color: "linear-gradient(135deg, #1C1C1E 0%, #FF2D55 100%)" },
-  { id: "carnet?tab=puntos", icon: "⚡", title: "Puntos R&A", description: "Gana, pierde y recupera puntos", color: "linear-gradient(135deg, #ea580c 0%, #f97316 100%)" },
   { id: "contrato", icon: "📜", title: "Contrato de pareja", description: "Nuestro pacto oficial · firmado", color: "linear-gradient(135deg, #8b5a2b 0%, #c9a96e 100%)" },
-  { id: "hucha", icon: "🐷", title: "Hucha", description: "Cada piropo negado, 1€", color: "linear-gradient(135deg, #C8894A 0%, #8B5E3C 100%)" },
   { id: "intimidad", icon: "🔐", title: "Secretos", description: "Solo vosotros lo veis", color: "linear-gradient(135deg, #FF2D55 0%, #C1135A 100%)" },
   { id: "plans", icon: "💑", title: "Planes", description: "Cread el plan perfecto juntos", color: "linear-gradient(135deg, #FF2D55 0%, #FF6B35 100%)" },
-  { id: "italian", icon: "🇮🇹", title: "Italiano", description: "Aprended juntos o por separado", color: "linear-gradient(135deg, #007AFF 0%, #5AC8FA 100%)" },
-  { id: "chat", icon: "💬", title: "Chat R&A", description: "IA con contexto de los dos", color: "linear-gradient(135deg, #AF52DE 0%, #FF2D55 100%)" },
   { id: "viajes", icon: "🌍", title: "Viajes", description: "Descubrid el mundo juntos", color: "linear-gradient(135deg, #007AFF 0%, #34C759 100%)" },
-];
-
-const DAILY_MODULES = [
-  { id: "reto", icon: "🎲", title: "Reto del día", description: "El mismo reto para los dos", color: "linear-gradient(135deg, #FF6B35 0%, #FF2D55 100%)" },
-  { id: "pregunta", icon: "❓", title: "Pregunta del día", description: "Responded y comparad", color: "linear-gradient(135deg, #007AFF 0%, #AF52DE 100%)" },
-  { id: "preferias", icon: "🤔", title: "¿Qué preferirías?", description: "Proponed y comparad elecciones", color: "linear-gradient(135deg, #AF52DE 0%, #FF2D55 100%)" },
   { id: "tarro", icon: "🫙", title: "Tarro de momentos", description: "Guardad lo que os importa", color: "linear-gradient(135deg, #AF52DE 0%, #FF9F0A 100%)" },
 ];
 
 const ALEJANDRO_PERSONAL = [
   { id: "cartas", icon: "💌", title: "Cartas", description: "Escríbele cuando quieras" },
-  { id: "psicologo", icon: "🧘", title: "Psicólogo", description: "Tu espacio privado" },
 ];
 
 const RUT_PERSONAL = [
   { id: "cartas", icon: "💌", title: "Cartas", description: "Escríbele cuando quieras" },
   { id: "tfg", icon: "🎓", title: "TFG", description: "Redacción, APA, análisis" },
-  { id: "estudios", icon: "📚", title: "Estudios", description: "Resúmenes y exámenes" },
-  { id: "psicologo", icon: "🧘", title: "Psicólogo", description: "Tu espacio privado" },
 ];
 
 export default function HomePage() {
@@ -53,8 +40,6 @@ export default function HomePage() {
   const personalModules = isAlejandro ? ALEJANDRO_PERSONAL : RUT_PERSONAL;
 
   const dailyMessage = getDailyMessage();
-  const freeDay = isFreeDayPlan();
-  const planIdea = getDailyPlan();
 
   return (
     <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "var(--bg-primary)", overflow: "hidden" }}>
@@ -106,7 +91,7 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.08, duration: 0.4 }}
           style={{
-            marginBottom: 14, borderRadius: 24,
+            marginBottom: 22, borderRadius: 24,
             background: "linear-gradient(135deg, #FF2D55 0%, #C42B5B 100%)",
             padding: "20px 22px",
             boxShadow: "0 8px 28px rgba(255,45,85,0.26)",
@@ -120,60 +105,11 @@ export default function HomePage() {
           </p>
         </motion.div>
 
-        {/* Plan del día (L/V/S/D) */}
-        {freeDay && (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.14, duration: 0.4 }}
-            style={{
-              marginBottom: 20, borderRadius: 24,
-              background: "linear-gradient(135deg, #FF6B35 0%, #FF9F0A 100%)",
-              padding: "20px 22px",
-              boxShadow: "0 6px 24px rgba(255,107,53,0.24)",
-            }}
-          >
-            <p style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.65)", textTransform: "uppercase", letterSpacing: "0.1em", margin: "0 0 12px" }}>
-              🗓️ Plan para hoy
-            </p>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-              <span style={{ fontSize: 34, lineHeight: 1 }}>{planIdea.emoji}</span>
-              <div>
-                <p style={{ fontSize: 16, fontWeight: 700, color: "white", margin: "0 0 4px", letterSpacing: "-0.2px" }}>{planIdea.title}</p>
-                <p style={{ fontSize: 13, color: "rgba(255,255,255,0.82)", margin: 0, lineHeight: 1.5 }}>{planIdea.desc}</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Cada día */}
-        <section style={{ marginBottom: 24 }}>
-          <SectionLabel text="Cada día" />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {DAILY_MODULES.map((mod, i) => (
-              <DailyCard key={mod.id} mod={mod} userParam={userParam} delay={i * 0.05} router={router} />
-            ))}
-          </div>
-        </section>
-
         {/* Con Rut / Con Alejandro */}
         <section style={{ marginBottom: 24 }}>
           <SectionLabel text={isAlejandro ? "Con Rut" : "Con Alejandro"} />
-          <motion.button
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 24, delay: 0.05 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => router.push(`/${userParam}/chat`)}
-            style={{ width: "100%", marginBottom: 10, background: "linear-gradient(135deg, #AF52DE 0%, #FF2D55 100%)", border: "none", borderRadius: 20, padding: "20px 22px", display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left", boxShadow: "0 6px 24px rgba(175,82,222,0.28)" }}
-          >
-            <span style={{ fontSize: 34 }}>💬</span>
-            <div>
-              <p style={{ fontSize: 17, fontWeight: 800, color: "white", margin: 0, letterSpacing: "-0.3px" }}>Chat R&A</p>
-              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", margin: "2px 0 0" }}>IA con contexto de los dos</p>
-            </div>
-            <div style={{ marginLeft: "auto", color: "rgba(255,255,255,0.6)", fontSize: 20 }}>›</div>
-          </motion.button>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {SHARED_MODULES.filter(m => m.id !== "chat").map((mod, i) => (
+            {SHARED_MODULES.map((mod, i) => (
               <CompactCard key={mod.id} mod={mod} userParam={userParam} delay={0.1 + i * 0.04} router={router} />
             ))}
           </div>
@@ -220,24 +156,6 @@ function SectionLabel({ text }: { text: string }) {
   return <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-quaternary)", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 10 }}>{text}</p>;
 }
 
-function DailyCard({ mod, userParam, delay, router }: any) {
-  return (
-    <motion.button
-      initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 320, damping: 26, delay }}
-      whileTap={{ scale: 0.94 }}
-      onClick={() => router.push(`/${userParam}/${mod.id}`)}
-      style={{ background: mod.color, border: "none", borderRadius: 20, padding: "18px 14px 16px", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 10, cursor: "pointer", textAlign: "left", boxShadow: "0 4px 18px rgba(0,0,0,0.14)", minHeight: 110 }}
-    >
-      <span style={{ fontSize: 28 }}>{mod.icon}</span>
-      <div>
-        <p style={{ fontSize: 14, fontWeight: 700, color: "white", margin: 0, lineHeight: 1.3 }}>{mod.title}</p>
-        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", margin: "3px 0 0", lineHeight: 1.3 }}>{mod.description}</p>
-      </div>
-    </motion.button>
-  );
-}
-
 function CompactCard({ mod, userParam, delay, router }: any) {
   return (
     <motion.button
@@ -278,7 +196,6 @@ function BottomNav({ userParam, router }: { userParam: string; router: any }) {
     <nav style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "rgba(242,242,247,0.92)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: "1px solid rgba(0,0,0,0.08)", display: "flex", justifyContent: "space-around", alignItems: "center", paddingBottom: "env(safe-area-inset-bottom)", paddingTop: 8, zIndex: 100 }}>
       {[
         { icon: "⊞", label: "Inicio", href: `/${userParam}` },
-        { icon: "💬", label: "Chat", href: `/${userParam}/chat` },
         { icon: "👤", label: "Perfil", href: `/${userParam}/profile` },
       ].map((item) => (
         <button key={item.href} onClick={() => router.push(item.href)}

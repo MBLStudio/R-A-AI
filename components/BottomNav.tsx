@@ -18,7 +18,6 @@ export function BottomNav() {
 
   const items: NavItem[] = [
     { icon: "⊞", label: "Inicio", href: `/${activeUser}` },
-    { icon: "💬", label: "Chat", href: `/${activeUser}/chat` },
     { icon: "👤", label: "Perfil", href: `/${activeUser}/profile` },
   ];
 

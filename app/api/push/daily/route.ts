@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { supabase } from "@/lib/supabase";
-import { getDailyMessage, getDailyPlan, isFreeDayPlan } from "@/lib/daily-content";
+import { getDailyMessage } from "@/lib/daily-content";
 
 webpush.setVapidDetails(
   process.env.VAPID_EMAIL!,
@@ -39,37 +39,19 @@ export async function GET(req: NextRequest) {
   if (error || !subs?.length) return NextResponse.json({ sent: 0 });
 
   const message = getDailyMessage();
-  const freeDay = isFreeDayPlan();
-  const plan = getDailyPlan();
 
-  const sends = subs.flatMap((sub) => {
+  const sends = subs.map((sub) => {
     const nombre = sub.user_name === "rut" ? "Rut" : "Alejandro";
-    const url = `/${sub.user_name}`;
 
-    const notifications: Promise<void>[] = [
-      sendToSub(sub, {
-        title: `💗 Buenos días, ${nombre}`,
-        body: message,
-        url,
-        tag: "daily-message",
-      }),
-    ];
-
-    if (freeDay) {
-      notifications.push(
-        sendToSub(sub, {
-          title: `${plan.emoji} Plan para hoy`,
-          body: `${plan.title} — ${plan.desc}`,
-          url,
-          tag: "daily-plan",
-        })
-      );
-    }
-
-    return notifications;
+    return sendToSub(sub, {
+      title: `💗 Buenos días, ${nombre}`,
+      body: message,
+      url: `/${sub.user_name}`,
+      tag: "daily-message",
+    });
   });
 
   const results = await Promise.allSettled(sends);
   const sent = results.filter((r) => r.status === "fulfilled").length;
-  return NextResponse.json({ sent, freeDay, message: message.slice(0, 60) });
+  return NextResponse.json({ sent, message: message.slice(0, 60) });
 }

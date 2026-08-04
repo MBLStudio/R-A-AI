@@ -51,35 +51,6 @@ export const DAILY_MESSAGES = [
   "El amor no siempre grita. A veces solo está, tranquilo y seguro, como tú.",
 ];
 
-export interface PlanIdea {
-  emoji: string;
-  title: string;
-  desc: string;
-}
-
-export const PLAN_IDEAS: PlanIdea[] = [
-  { emoji: "🍝", title: "Cena casera especial", desc: "Elegid una receta que nunca hayáis cocinado juntos y preparadla de cero" },
-  { emoji: "🎬", title: "Noche de pelis", desc: "Una peli cada uno, palomitas caseras y manta — sin mirar el móvil" },
-  { emoji: "🚶", title: "Paseo sin rumbo", desc: "Salid a caminar sin destino y dejad que el camino os lleve a algún sitio nuevo" },
-  { emoji: "☕", title: "Café y charla larga", desc: "Sin pantallas, solo vosotros dos hablando de lo que sea durante horas" },
-  { emoji: "🎮", title: "Tarde de juegos", desc: "Cartas, juego de mesa o videojuego — lo que tengáis en casa" },
-  { emoji: "🌅", title: "Desayuno especial", desc: "Levantaos con calma y preparad un desayuno rico los dos juntos" },
-  { emoji: "📸", title: "Sesión de fotos", desc: "Salid a hacer fotos por el barrio o un parque — seréis vuestros propios fotógrafos" },
-  { emoji: "🍕", title: "Pizza casera", desc: "Haced la masa desde cero, cada uno pone sus ingredientes favoritos" },
-  { emoji: "🎵", title: "Playlist y baile", desc: "Haced una playlist con vuestras canciones y bailad en casa sin vergüenza" },
-  { emoji: "🌙", title: "Noche de estrellas", desc: "Salid a un sitio oscuro, tumbad una manta y mirad el cielo juntos" },
-  { emoji: "🍦", title: "Ruta de helado", desc: "Salid a tomar algo dulce y dad una vuelta larga por la ciudad" },
-  { emoji: "✍️", title: "Cartas de papel", desc: "Escribíos una carta a mano el uno al otro y leedlas juntos en voz alta" },
-  { emoji: "🧩", title: "Tarde de puzzle", desc: "Un puzzle difícil, música de fondo y mucha paciencia — el mejor plan sin salir" },
-  { emoji: "🎤", title: "Karaoke en casa", desc: "YouTube + micrófono improvisado — las canciones más ridículas ganan" },
-  { emoji: "🌿", title: "Mercadillo", desc: "Id a un mercadillo o bazar y mirad cosas sin la obligación de comprar nada" },
-  { emoji: "🍳", title: "Brunch tardío", desc: "Tortitas, huevos o lo que más os guste — sin prisas y con buen café" },
-  { emoji: "🎨", title: "Tarde de arte", desc: "Pintad algo juntos aunque salga fatal — lo que importa es reíros haciéndolo" },
-  { emoji: "📚", title: "Lectura compartida", desc: "Elegid un libro o artículo y leédlo el uno al otro en voz alta" },
-  { emoji: "🛁", title: "Spa en casa", desc: "Mascarillas, velas, música suave y tiempo para desconectar juntos" },
-  { emoji: "🌳", title: "Picnic improvisado", desc: "Algo rico de la nevera, una manta y un parque — el plan perfecto sin gastar nada" },
-];
-
 export function getDayOfYear(): number {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 0);
@@ -88,12 +59,4 @@ export function getDayOfYear(): number {
 
 export function getDailyMessage(): string {
   return DAILY_MESSAGES[getDayOfYear() % DAILY_MESSAGES.length];
-}
-
-export function getDailyPlan(): PlanIdea {
-  return PLAN_IDEAS[getDayOfYear() % PLAN_IDEAS.length];
-}
-
-export function isFreeDayPlan(): boolean {
-  return [0, 1, 5, 6].includes(new Date().getDay());
 }
