@@ -32,6 +32,7 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
   const [texto, setTexto] = useState("");
   const [pensando, setPensando] = useState(false);
   const [hayFoto, setHayFoto] = useState(false);
+  const [ampliada, setAmpliada] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
 
   // ¿Han dejado una imagen propia en /public/asistente.png?
@@ -116,11 +117,11 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
           position: "fixed",
           right: 16,
           bottom: `calc(20px + env(safe-area-inset-bottom))`,
-          width: 62, height: 62, borderRadius: "50%",
-          border: `2.5px solid ${BCN.sol}`,
+          width: 78, height: 78, borderRadius: "50%",
+          border: `3px solid ${BCN.sol}`,
           background: "#0A1A3C",
           cursor: "pointer", padding: 0, overflow: "hidden",
-          boxShadow: "0 6px 22px rgba(10,26,60,0.45)",
+          boxShadow: "0 8px 26px rgba(10,26,60,0.5)",
           zIndex: 80,
         }}
       >
@@ -171,13 +172,17 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
                 background: `linear-gradient(135deg, #0A1A3C 0%, #8B1538 100%)`,
                 padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, flexShrink: 0,
               }}>
-                <div style={{
-                  width: 42, height: 42, borderRadius: "50%", overflow: "hidden",
-                  border: `2px solid ${BCN.sol}`, flexShrink: 0, background: "#0A1A3C",
-                  position: "relative",
-                }}>
+                <button
+                  onClick={() => hayFoto && setAmpliada(true)}
+                  aria-label="Ver la foto"
+                  style={{
+                    width: 46, height: 46, borderRadius: "50%", overflow: "hidden",
+                    border: `2px solid ${BCN.sol}`, flexShrink: 0, background: "#0A1A3C",
+                    position: "relative", padding: 0,
+                    cursor: hayFoto ? "pointer" : "default",
+                  }}>
                   <Avatar hayFoto={hayFoto} />
-                </div>
+                </button>
                 <div style={{ minWidth: 0 }}>
                   <p style={{ fontSize: 15.5, fontWeight: 700, color: "white", margin: 0 }}>
                     Vuestro asistente
@@ -205,12 +210,15 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
                   <div style={{ paddingTop: 4 }}>
                     {hayFoto && (
                       <motion.img
-                        src="/asistente-completo.png" alt=""
+                        src="/asistente-completo.png" alt="Ver la foto completa"
+                        onClick={() => setAmpliada(true)}
                         initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+                        whileTap={{ scale: 0.97 }}
                         transition={{ duration: 0.45 }}
                         style={{
                           display: "block", width: "62%", maxWidth: 210, margin: "0 auto 10px",
                           filter: "drop-shadow(0 10px 22px rgba(10,26,60,0.28))",
+                          cursor: "pointer",
                         }}
                       />
                     )}
@@ -276,6 +284,48 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── La foto, a pantalla completa ── */}
+      <AnimatePresence>
+        {ampliada && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => setAmpliada(false)}
+            style={{
+              position: "fixed", inset: 0, zIndex: 300,
+              background: "rgba(8,6,5,0.93)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 20,
+            }}
+          >
+            <motion.img
+              src="/asistente-completo.png" alt=""
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.94, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 260, damping: 26 }}
+              style={{
+                maxWidth: "100%", maxHeight: "100%", objectFit: "contain",
+                borderRadius: 16,
+                filter: "drop-shadow(0 16px 40px rgba(0,0,0,0.6))",
+              }}
+            />
+
+            <button onClick={() => setAmpliada(false)} aria-label="Cerrar"
+              style={{
+                position: "fixed", top: `calc(16px + env(safe-area-inset-top))`, right: 16,
+                width: 40, height: 40, borderRadius: "50%",
+                background: "rgba(255,255,255,0.16)", border: "none", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                backdropFilter: "blur(8px)",
+              }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
+              </svg>
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
     </>
