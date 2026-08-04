@@ -27,7 +27,8 @@ export default function MomentoPage() {
   const [tipo, setTipo] = useState<TipoMomento>("explorar");
   const [titulo, setTitulo] = useState("");
   const [nota, setNota] = useState("");
-  const [fecha, setFecha] = useState(hoyISO());
+  // El calendario manda el día que se ha pinchado.
+  const [fecha, setFecha] = useState(searchParams.get("fecha") ?? hoyISO());
   const [hora, setHora] = useState("");
   const [lugar, setLugar] = useState("");
   const [barrioId, setBarrioId] = useState("");
@@ -78,7 +79,7 @@ export default function MomentoPage() {
       es_hito: esHito,
       espontaneo: vivido,
     });
-    router.push(`/${user}/barcelona/${vivido ? "historia" : "agenda"}`);
+    router.back();
   };
 
   return (

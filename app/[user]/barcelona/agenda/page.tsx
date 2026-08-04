@@ -1,43 +1,86 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, TIPO_MOMENTO, type Momento, type Etapa } from "@/lib/barcelona/types";
 import {
-  getEtapaActiva, getAgenda, vivirMomento, deleteMomento, hoyISO, nombreDia, formatFechaLarga,
+  getEtapaActiva, getMomentos, vivirMomento, deleteMomento, hoyISO, formatFechaLarga, nombreDia,
 } from "@/lib/barcelona/queries";
-import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
+import { Pantalla, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
 
-export default function AgendaPage() {
+const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
+const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+/** Fecha ISO local, sin líos de zona horaria. */
+function iso(a: number, m: number, d: number): string {
+  return `${a}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+export default function CalendarioPage() {
   const params = useParams();
   const router = useRouter();
   const { activeUser, setUser } = useUserStore();
   const user = params.user as UserName;
 
+  const hoy = hoyISO();
+  const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [momentos, setMomentos] = useState<Momento[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [seleccionado, setSeleccionado] = useState(hoy);
   const [viviendo, setViviendo] = useState<Momento | null>(null);
+
+  const [ancla, setAncla] = useState(() => {
+    const d = new Date(hoy + "T12:00:00");
+    return { anio: d.getFullYear(), mes: d.getMonth() };
+  });
 
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
 
   const cargar = useCallback(async () => {
     const e = await getEtapaActiva();
     if (!e) { setCargando(false); return; }
-    setMomentos(await getAgenda(e.id));
+    setEtapa(e);
+    setMomentos(await getMomentos(e.id));
     setCargando(false);
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const hoy = hoyISO();
-  const grupos = momentos.reduce<{ fecha: string; items: Momento[] }[]>((acc, m) => {
-    const ultimo = acc[acc.length - 1];
-    if (ultimo && ultimo.fecha === m.fecha) ultimo.items.push(m);
-    else acc.push({ fecha: m.fecha, items: [m] });
-    return acc;
-  }, []);
+  /** Momentos agrupados por fecha, para pintar los puntos. */
+  const porFecha = useMemo(() => {
+    const m = new Map<string, Momento[]>();
+    for (const x of momentos) {
+      const lista = m.get(x.fecha);
+      if (lista) lista.push(x);
+      else m.set(x.fecha, [x]);
+    }
+    for (const lista of m.values()) {
+      lista.sort((a, b) => (a.hora ?? "99").localeCompare(b.hora ?? "99"));
+    }
+    return m;
+  }, [momentos]);
+
+  /** Celdas del mes: huecos al principio + los días. */
+  const celdas = useMemo(() => {
+    const primero = new Date(ancla.anio, ancla.mes, 1);
+    const huecos = (primero.getDay() + 6) % 7;              // lunes = 0
+    const total = new Date(ancla.anio, ancla.mes + 1, 0).getDate();
+    return [
+      ...Array<null>(huecos).fill(null),
+      ...Array.from({ length: total }, (_, i) => i + 1),
+    ];
+  }, [ancla]);
+
+  const delDia = porFecha.get(seleccionado) ?? [];
+
+  const mover = (n: number) => {
+    setAncla((a) => {
+      const d = new Date(a.anio, a.mes + n, 1);
+      return { anio: d.getFullYear(), mes: d.getMonth() };
+    });
+  };
 
   const borrar = async (id: string) => {
     await deleteMomento(id);
@@ -46,114 +89,219 @@ export default function AgendaPage() {
 
   return (
     <Pantalla
-      titulo="Agenda"
-      subtitulo={momentos.length > 0 ? `${momentos.length} ${momentos.length === 1 ? "plan" : "planes"} por delante` : "Lo que viene"}
+      titulo="Calendario"
+      subtitulo={etapa?.nombre ?? "Vuestros días"}
       color={BCN.mar}
-      accion={{ icon: IconoMas, label: "Añadir plan", onClick: () => router.push(`/${user}/barcelona/momento?plan=1`) }}
+      accion={{
+        icon: IconoMas,
+        label: "Añadir",
+        onClick: () => router.push(`/${user}/barcelona/momento?fecha=${seleccionado}&plan=1`),
+      }}
     >
       {cargando ? (
-        <Cargando />
-      ) : momentos.length === 0 ? (
-        <Vacio
-          icon="🗓️"
-          titulo="Nada planeado todavía"
-          texto="Una visita, una cena, un barrio por explorar. Lo que sea que os apetezca."
-          accion={{ label: "Añadir un plan", onClick: () => router.push(`/${user}/barcelona/momento?plan=1`) }}
-        />
+        <div style={{ height: 320, borderRadius: 18, background: BCN.arenaOsc, opacity: 0.5 }} />
       ) : (
-        grupos.map((g, gi) => {
-          const esHoy = g.fecha === hoy;
-          const manana = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-          const titulo = esHoy ? "Hoy" : g.fecha === manana ? "Mañana" : `${nombreDia(g.fecha)}, ${formatFechaLarga(g.fecha)}`;
+        <>
+          {/* ── Rejilla del mes ── */}
+          <div style={{ background: "white", borderRadius: 18, border: `1px solid ${BCN.arenaOsc}`, padding: "14px 12px 12px", boxShadow: "0 2px 10px rgba(44,36,32,0.04)" }}>
 
-          return (
-            <div key={g.fecha} style={{ marginBottom: 22 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <p style={{
-                  fontSize: 11.5, fontWeight: 800, color: esHoy ? BCN.mar : BCN.humo,
-                  textTransform: "uppercase", letterSpacing: "0.11em", margin: 0,
-                }}>
-                  {titulo}
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 14, padding: "0 4px" }}>
+              <button onClick={() => mover(-1)} aria-label="Mes anterior" style={flecha}>‹</button>
+              <p style={{ flex: 1, textAlign: "center", fontFamily: "Georgia, serif", fontSize: 17, color: BCN.tinta, margin: 0, textTransform: "capitalize" }}>
+                {MESES[ancla.mes]} {ancla.anio}
+              </p>
+              <button onClick={() => mover(1)} aria-label="Mes siguiente" style={flecha}>›</button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+              {DIAS_SEMANA.map((d, i) => (
+                <p key={i} style={{ textAlign: "center", fontSize: 10.5, fontWeight: 700, color: BCN.humo, margin: "0 0 4px" }}>
+                  {d}
                 </p>
-                {esHoy && <span style={{ width: 6, height: 6, borderRadius: "50%", background: BCN.mar }} />}
-                <div style={{ flex: 1, height: 1, background: BCN.arenaOsc }} />
-              </div>
-
-              {g.items.map((m, i) => (
-                <Plan
-                  key={m.id} momento={m} delay={(gi * 2 + i) * 0.04}
-                  onVivir={() => setViviendo(m)}
-                  onBorrar={() => borrar(m.id)}
-                />
               ))}
             </div>
-          );
-        })
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+              {celdas.map((dia, i) => {
+                if (dia === null) return <div key={`h${i}`} />;
+
+                const fecha = iso(ancla.anio, ancla.mes, dia);
+                const items = porFecha.get(fecha) ?? [];
+                const esHoy = fecha === hoy;
+                const activo = fecha === seleccionado;
+
+                return (
+                  <button key={fecha} onClick={() => setSeleccionado(fecha)}
+                    style={{
+                      aspectRatio: "1", border: "none", cursor: "pointer", borderRadius: 11,
+                      background: activo ? BCN.mar : esHoy ? `${BCN.mar}14` : "transparent",
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                      gap: 3, padding: 0, transition: "background 0.15s",
+                    }}>
+                    <span style={{
+                      fontSize: 14,
+                      fontWeight: activo || esHoy ? 700 : 400,
+                      color: activo ? "white" : esHoy ? BCN.mar : BCN.tinta,
+                    }}>
+                      {dia}
+                    </span>
+
+                    <div style={{ display: "flex", gap: 2, height: 4 }}>
+                      {items.slice(0, 3).map((m) => (
+                        <span key={m.id} style={{
+                          width: 4, height: 4, borderRadius: "50%",
+                          background: activo ? "rgba(255,255,255,0.9)" : (TIPO_MOMENTO[m.tipo]?.color ?? BCN.humo),
+                          opacity: m.estado === "vivido" ? 1 : 0.55,
+                        }} />
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── El día elegido ── */}
+          <div style={{ marginTop: 18 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 11, padding: "0 3px" }}>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: 18, color: BCN.tinta, margin: 0, textTransform: "capitalize" }}>
+                {seleccionado === hoy ? "Hoy" : nombreDia(seleccionado)}
+              </p>
+              <p style={{ fontSize: 12.5, color: BCN.humo, margin: 0 }}>
+                {formatFechaLarga(seleccionado)}
+              </p>
+              {delDia.length > 0 && (
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: BCN.humo }}>
+                  {delDia.length} {delDia.length === 1 ? "cosa" : "cosas"}
+                </span>
+              )}
+            </div>
+
+            <AnimatePresence mode="wait">
+              <motion.div key={seleccionado}
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {delDia.length === 0 ? (
+                  <button onClick={() => router.push(`/${user}/barcelona/momento?fecha=${seleccionado}&plan=1`)}
+                    style={{
+                      width: "100%", padding: "26px 20px", borderRadius: 16,
+                      border: `1.5px dashed ${BCN.arenaOsc}`, background: "transparent",
+                      cursor: "pointer", textAlign: "center",
+                    }}>
+                    <p style={{ fontSize: 14, color: BCN.humo, margin: 0 }}>
+                      Nada este día. <strong style={{ color: BCN.mar }}>Añadir algo</strong>
+                    </p>
+                  </button>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {delDia.map((m, i) => (
+                      <Evento key={m.id} momento={m} delay={i * 0.04}
+                        onVivir={() => setViviendo(m)}
+                        onBorrar={() => borrar(m.id)} />
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </>
       )}
 
       <HojaVivir
         momento={viviendo}
         onCerrar={() => setViviendo(null)}
         onGuardado={async () => { setViviendo(null); await cargar(); }}
-        onVerHistoria={() => router.push(`/${user}/barcelona/historia`)}
       />
     </Pantalla>
   );
 }
 
-function Plan({ momento, delay, onVivir, onBorrar }: {
+/* ─── Un evento del día ────────────────────────────────────── */
+
+function Evento({ momento, delay, onVivir, onBorrar }: {
   momento: Momento; delay: number; onVivir: () => void; onBorrar: () => void;
 }) {
   const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
-  const [menu, setMenu] = useState(false);
+  const [abierto, setAbierto] = useState(false);
+  const vivido = momento.estado === "vivido";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.3 }}
+      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.25 }}
       style={{
-        background: "white", border: `1px solid ${BCN.arenaOsc}`, borderRadius: 15,
-        padding: "13px 15px", marginBottom: 8, display: "flex", alignItems: "center", gap: 13,
+        background: "white", borderRadius: 15,
+        border: `1px solid ${vivido ? cfg.color + "33" : BCN.arenaOsc}`,
+        overflow: "hidden",
         boxShadow: "0 2px 8px rgba(44,36,32,0.04)",
       }}
     >
-      <div style={{ width: 40, height: 40, borderRadius: 12, background: `${cfg.color}16`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
-        {cfg.icon}
-      </div>
+      <button onClick={() => setAbierto(!abierto)}
+        style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: "13px 15px", display: "flex", alignItems: "flex-start", gap: 12 }}>
 
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: 15, fontWeight: 600, color: BCN.tinta, margin: 0, lineHeight: 1.3 }}>{momento.titulo}</p>
-        <p style={{ fontSize: 12, color: BCN.humo, margin: "2px 0 0" }}>
-          {momento.hora ? `${momento.hora.slice(0, 5)} · ` : ""}{cfg.label}
-          {momento.lugar ? ` · ${momento.lugar}` : ""}
-        </p>
-      </div>
+        <div style={{ width: 38, height: 38, borderRadius: 11, background: `${cfg.color}16`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>
+          {cfg.icon}
+        </div>
 
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-        <button onClick={onVivir} aria-label="Marcar como vivido"
-          style={{ width: 34, height: 34, borderRadius: "50%", background: `${BCN.teja}14`, border: `1px solid ${BCN.teja}33`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
-          ✓
-        </button>
-        <button onClick={() => setMenu(!menu)} aria-label="Más opciones"
-          style={{ width: 34, height: 34, borderRadius: "50%", background: BCN.arena, border: `1px solid ${BCN.arenaOsc}`, cursor: "pointer", color: BCN.humo, fontSize: 15, lineHeight: 1 }}>
-          ⋯
-        </button>
-      </div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            {momento.hora && (
+              <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>{momento.hora.slice(0, 5)}</span>
+            )}
+            {vivido && <span style={{ fontSize: 10 }}>✓</span>}
+            {momento.es_hito && <span style={{ fontSize: 10 }}>⭐</span>}
+            {momento.autor !== "ambos" && (
+              <span style={{ fontSize: 10, color: BCN.humo, background: BCN.arena, padding: "1px 6px", borderRadius: 5 }}>
+                {momento.autor === "rut" ? "Rut" : "Alejandro"}
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: BCN.tinta, margin: "2px 0 0", lineHeight: 1.3 }}>
+            {momento.titulo}
+          </p>
+          {momento.lugar && (
+            <p style={{ fontSize: 12, color: BCN.humo, margin: "2px 0 0" }}>📍 {momento.lugar}</p>
+          )}
+          {momento.nota && (
+            <p style={{
+              fontSize: 13.5, color: BCN.tinta, opacity: 0.8, margin: "6px 0 0", lineHeight: 1.5,
+              ...(abierto ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+            }}>
+              {momento.nota}
+            </p>
+          )}
+        </div>
+      </button>
 
-      {menu && (
-        <motion.button
-          initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-          onClick={onBorrar}
-          style={{ position: "absolute", right: 20, marginTop: 60, padding: "8px 14px", borderRadius: 10, background: "white", border: `1px solid ${BCN.arenaOsc}`, color: BCN.teja, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 14px rgba(44,36,32,0.12)", zIndex: 5 }}>
-          Borrar
-        </motion.button>
-      )}
+      <AnimatePresence>
+        {abierto && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div style={{ padding: "0 15px 13px", display: "flex", gap: 8 }}>
+              {!vivido && (
+                <button onClick={onVivir}
+                  style={{ flex: 1, padding: "10px", borderRadius: 11, border: "none", background: BCN.teja, color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  ✓ Ya lo hemos hecho
+                </button>
+              )}
+              <button onClick={onBorrar}
+                style={{ padding: "10px 15px", borderRadius: 11, border: `1px solid ${BCN.arenaOsc}`, background: "white", color: BCN.humo, fontSize: 13, cursor: "pointer" }}>
+                Borrar
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
 
-/** Convertir un plan en recuerdo: solo pide lo que hace falta. */
-function HojaVivir({ momento, onCerrar, onGuardado, onVerHistoria }: {
-  momento: Momento | null; onCerrar: () => void; onGuardado: () => void; onVerHistoria: () => void;
+/* ─── Convertir un plan en recuerdo ────────────────────────── */
+
+function HojaVivir({ momento, onCerrar, onGuardado }: {
+  momento: Momento | null; onCerrar: () => void; onGuardado: () => void;
 }) {
   const [nota, setNota] = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -166,14 +314,13 @@ function HojaVivir({ momento, onCerrar, onGuardado, onVerHistoria }: {
     await vivirMomento(momento.id, nota.trim());
     setGuardando(false);
     onGuardado();
-    onVerHistoria();
   };
 
   return (
     <Hoja abierta={!!momento} onCerrar={onCerrar} titulo="¿Cómo fue?">
       <p style={{ fontSize: 13.5, color: BCN.humo, margin: "-10px 0 18px", lineHeight: 1.55 }}>
         <strong style={{ color: BCN.tinta }}>{momento?.titulo}</strong> pasa a vuestra historia.
-        Podéis añadir fotos luego desde la línea del tiempo.
+        Las fotos las podéis añadir luego desde la línea del tiempo.
       </p>
 
       <Campo label="Una nota, si os apetece">
@@ -189,15 +336,7 @@ function HojaVivir({ momento, onCerrar, onGuardado, onVerHistoria }: {
   );
 }
 
-function Cargando() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {[0, 1, 2].map((i) => (
-        <motion.div key={i}
-          animate={{ opacity: [0.4, 0.75, 0.4] }}
-          transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.12 }}
-          style={{ height: 68, borderRadius: 15, background: BCN.arenaOsc }} />
-      ))}
-    </div>
-  );
-}
+const flecha: React.CSSProperties = {
+  width: 30, height: 30, borderRadius: "50%", border: "none", background: BCN.arena,
+  color: BCN.tinta, fontSize: 19, cursor: "pointer", lineHeight: 1, flexShrink: 0,
+};
