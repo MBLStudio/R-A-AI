@@ -10,7 +10,7 @@ import { rankear } from "@/lib/barcelona/compat";
 import {
   getEtapaActiva, getSnapshot, diasEnCiudad, formatFechaCorta, nombreDia, hoyISO,
 } from "@/lib/barcelona/queries";
-import { Skyline } from "@/components/barcelona/Skyline";
+import { Fondo, HojaFondos } from "@/components/barcelona/Fondo";
 import { Asistente } from "@/components/barcelona/Asistente";
 
 /* ═══════════════════════════════════════════════════════════
@@ -65,6 +65,7 @@ export default function BarcelonaPage() {
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [sinEtapa, setSinEtapa] = useState(false);
+  const [eligiendoFoto, setEligiendoFoto] = useState(false);
 
   useEffect(() => {
     if (user && user !== activeUser) setUser(user, user);
@@ -106,6 +107,7 @@ export default function BarcelonaPage() {
           dias={dias}
           onBack={() => router.push(`/${user}`)}
           onAjustes={() => ir("ajustes")}
+          onFoto={() => setEligiendoFoto(true)}
         />
 
         <div style={{
@@ -162,25 +164,28 @@ export default function BarcelonaPage() {
 
       {/* El asistente vive flotando en la esquina */}
       {!sinEtapa && <Asistente etapa={etapa} usuario={user} />}
+
+      <HojaFondos abierta={eligiendoFoto} onCerrar={() => setEligiendoFoto(false)} />
     </div>
   );
 }
 
 /* ─── Cabecera ─────────────────────────────────────────────── */
 
-function Cabecera({ etapa, dias, onBack, onAjustes }: {
-  etapa: Etapa | null; dias: number | null; onBack: () => void; onAjustes: () => void;
+function Cabecera({ etapa, dias, onBack, onAjustes, onFoto }: {
+  etapa: Etapa | null; dias: number | null;
+  onBack: () => void; onAjustes: () => void; onFoto: () => void;
 }) {
   const titulo = etapa?.subtitulo ?? "Catalanes por una temporada";
 
   return (
     <div style={{ position: "relative", overflow: "hidden", marginBottom: 20 }}>
-      <Skyline />
+      <Fondo onGestionar={onFoto} />
 
-      {/* Velo para que el texto se lea siempre */}
+      {/* Velo para que el texto se lea sobre cualquier foto */}
       <div style={{
-        position: "absolute", inset: 0,
-        background: "linear-gradient(180deg, rgba(90,36,24,0.5) 0%, rgba(90,36,24,0.12) 45%, rgba(90,36,24,0.42) 100%)",
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background: "linear-gradient(180deg, rgba(20,14,10,0.55) 0%, rgba(20,14,10,0.15) 42%, rgba(20,14,10,0.62) 100%)",
       }} />
 
       <div style={{
