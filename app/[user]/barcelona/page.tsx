@@ -11,6 +11,7 @@ import {
   getEtapaActiva, getSnapshot, diasEnCiudad, formatFechaCorta, nombreDia, hoyISO,
 } from "@/lib/barcelona/queries";
 import { Skyline } from "@/components/barcelona/Skyline";
+import { Asistente } from "@/components/barcelona/Asistente";
 
 /* ═══════════════════════════════════════════════════════════
    Proyecto Barcelona — el índice del capítulo.
@@ -152,15 +153,15 @@ export default function BarcelonaPage() {
                 </section>
               ))}
 
-              {/* Copiloto */}
-              <Copiloto onClick={() => ir("copiloto")} />
-
               {/* El libro */}
               <Libro onClick={() => ir("nuestra-barcelona")} />
             </>
           )}
         </div>
       </div>
+
+      {/* El asistente vive flotando en la esquina */}
+      {!sinEtapa && <Asistente etapa={etapa} usuario={user} />}
     </div>
   );
 }
@@ -372,36 +373,6 @@ function FilaLista({ fila, delay, ultima, onClick }: {
   );
 }
 
-/* ─── Copiloto ─────────────────────────────────────────────── */
-
-function Copiloto({ onClick }: { onClick: () => void }) {
-  return (
-    <motion.button
-      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-      whileTap={{ scale: 0.98 }} onClick={onClick}
-      style={{
-        width: "100%", marginTop: 22, border: `1px solid ${BCN.noche}22`, cursor: "pointer",
-        textAlign: "left", borderRadius: 16, padding: "15px 17px", background: "white",
-        display: "flex", alignItems: "center", gap: 13,
-      }}
-    >
-      <div style={{
-        width: 34, height: 34, borderRadius: 10, flexShrink: 0,
-        background: `linear-gradient(135deg, ${BCN.noche} 0%, ${BCN.mar} 100%)`,
-        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-      }}>
-        ✨
-      </div>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: 15, fontWeight: 600, color: BCN.tinta, margin: 0 }}>Preguntar al copiloto</p>
-        <p style={{ fontSize: 12.5, color: BCN.humo, margin: "1px 0 0" }}>Conoce todo vuestro proyecto</p>
-      </div>
-      <span style={{ color: BCN.arenaOsc, fontSize: 18 }}>›</span>
-    </motion.button>
-  );
-}
-
-/* ─── El libro ─────────────────────────────────────────────── */
 
 function Libro({ onClick }: { onClick: () => void }) {
   return (

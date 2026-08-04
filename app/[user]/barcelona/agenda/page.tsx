@@ -4,11 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO, type Momento, type Etapa } from "@/lib/barcelona/types";
+import { BCN, TIPO_MOMENTO, type Momento, type Etapa, type Barrio } from "@/lib/barcelona/types";
 import {
-  getEtapaActiva, getMomentos, vivirMomento, deleteMomento, hoyISO, formatFechaLarga, nombreDia,
+  getEtapaActiva, getMomentos, getBarrios, hoyISO, formatFechaLarga, nombreDia,
 } from "@/lib/barcelona/queries";
-import { Pantalla, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
+import { Pantalla, IconoMas } from "@/components/barcelona/Shell";
+import { HojaEvento } from "@/components/barcelona/HojaEvento";
 
 const DIAS_SEMANA = ["L", "M", "X", "J", "V", "S", "D"];
 const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
@@ -27,9 +28,10 @@ export default function CalendarioPage() {
   const hoy = hoyISO();
   const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [momentos, setMomentos] = useState<Momento[]>([]);
+  const [barrios, setBarrios] = useState<Barrio[]>([]);
   const [cargando, setCargando] = useState(true);
   const [seleccionado, setSeleccionado] = useState(hoy);
-  const [viviendo, setViviendo] = useState<Momento | null>(null);
+  const [abierto, setAbierto] = useState<Momento | null>(null);
 
   const [ancla, setAncla] = useState(() => {
     const d = new Date(hoy + "T12:00:00");
@@ -42,7 +44,11 @@ export default function CalendarioPage() {
     const e = await getEtapaActiva();
     if (!e) { setCargando(false); return; }
     setEtapa(e);
-    setMomentos(await getMomentos(e.id));
+    const [m, b] = await Promise.all([getMomentos(e.id), getBarrios(e.id)]);
+    setMomentos(m);
+    setBarrios(b);
+    // Si hay una ficha abierta, refrescarla con los datos nuevos.
+    setAbierto((prev) => (prev ? m.find((x) => x.id === prev.id) ?? null : null));
     setCargando(false);
   }, []);
 
@@ -80,11 +86,6 @@ export default function CalendarioPage() {
       const d = new Date(a.anio, a.mes + n, 1);
       return { anio: d.getFullYear(), mes: d.getMonth() };
     });
-  };
-
-  const borrar = async (id: string) => {
-    await deleteMomento(id);
-    setMomentos((prev) => prev.filter((m) => m.id !== id));
   };
 
   return (
@@ -196,9 +197,7 @@ export default function CalendarioPage() {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {delDia.map((m, i) => (
-                      <Evento key={m.id} momento={m} delay={i * 0.04}
-                        onVivir={() => setViviendo(m)}
-                        onBorrar={() => borrar(m.id)} />
+                      <Evento key={m.id} momento={m} delay={i * 0.04} onAbrir={() => setAbierto(m)} />
                     ))}
                   </div>
                 )}
@@ -208,10 +207,11 @@ export default function CalendarioPage() {
         </>
       )}
 
-      <HojaVivir
-        momento={viviendo}
-        onCerrar={() => setViviendo(null)}
-        onGuardado={async () => { setViviendo(null); await cargar(); }}
+      <HojaEvento
+        momento={abierto}
+        barrios={barrios}
+        onCerrar={() => setAbierto(null)}
+        onCambio={cargar}
       />
     </Pantalla>
   );
@@ -219,16 +219,16 @@ export default function CalendarioPage() {
 
 /* ─── Un evento del día ────────────────────────────────────── */
 
-function Evento({ momento, delay, onVivir, onBorrar }: {
-  momento: Momento; delay: number; onVivir: () => void; onBorrar: () => void;
+function Evento({ momento, delay, onAbrir }: {
+  momento: Momento; delay: number; onAbrir: () => void;
 }) {
   const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
-  const [abierto, setAbierto] = useState(false);
   const vivido = momento.estado === "vivido";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay, duration: 0.25 }}
+      whileTap={{ scale: 0.985 }}
       style={{
         background: "white", borderRadius: 15,
         border: `1px solid ${vivido ? cfg.color + "33" : BCN.arenaOsc}`,
@@ -236,7 +236,7 @@ function Evento({ momento, delay, onVivir, onBorrar }: {
         boxShadow: "0 2px 8px rgba(44,36,32,0.04)",
       }}
     >
-      <button onClick={() => setAbierto(!abierto)}
+      <button onClick={onAbrir}
         style={{ width: "100%", background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: "13px 15px", display: "flex", alignItems: "flex-start", gap: 12 }}>
 
         <div style={{ width: 38, height: 38, borderRadius: 11, background: `${cfg.color}16`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>
@@ -265,76 +265,19 @@ function Evento({ momento, delay, onVivir, onBorrar }: {
           {momento.nota && (
             <p style={{
               fontSize: 13.5, color: BCN.tinta, opacity: 0.8, margin: "6px 0 0", lineHeight: 1.5,
-              ...(abierto ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
             }}>
               {momento.nota}
             </p>
           )}
         </div>
-      </button>
 
-      <AnimatePresence>
-        {abierto && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            style={{ overflow: "hidden" }}
-          >
-            <div style={{ padding: "0 15px 13px", display: "flex", gap: 8 }}>
-              {!vivido && (
-                <button onClick={onVivir}
-                  style={{ flex: 1, padding: "10px", borderRadius: 11, border: "none", background: BCN.teja, color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  ✓ Ya lo hemos hecho
-                </button>
-              )}
-              <button onClick={onBorrar}
-                style={{ padding: "10px 15px", borderRadius: 11, border: `1px solid ${BCN.arenaOsc}`, background: "white", color: BCN.humo, fontSize: 13, cursor: "pointer" }}>
-                Borrar
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <span style={{ color: BCN.arenaOsc, fontSize: 17, alignSelf: "center", flexShrink: 0 }}>›</span>
+      </button>
     </motion.div>
   );
 }
 
-/* ─── Convertir un plan en recuerdo ────────────────────────── */
-
-function HojaVivir({ momento, onCerrar, onGuardado }: {
-  momento: Momento | null; onCerrar: () => void; onGuardado: () => void;
-}) {
-  const [nota, setNota] = useState("");
-  const [guardando, setGuardando] = useState(false);
-
-  useEffect(() => { setNota(momento?.nota ?? ""); }, [momento]);
-
-  const guardar = async () => {
-    if (!momento) return;
-    setGuardando(true);
-    await vivirMomento(momento.id, nota.trim());
-    setGuardando(false);
-    onGuardado();
-  };
-
-  return (
-    <Hoja abierta={!!momento} onCerrar={onCerrar} titulo="¿Cómo fue?">
-      <p style={{ fontSize: 13.5, color: BCN.humo, margin: "-10px 0 18px", lineHeight: 1.55 }}>
-        <strong style={{ color: BCN.tinta }}>{momento?.titulo}</strong> pasa a vuestra historia.
-        Las fotos las podéis añadir luego desde la línea del tiempo.
-      </p>
-
-      <Campo label="Una nota, si os apetece">
-        <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={4}
-          placeholder="Mucho más bonito de lo esperado…"
-          style={{ ...estiloInput, resize: "vertical", lineHeight: 1.5 }} />
-      </Campo>
-
-      <Boton onClick={guardar} disabled={guardando} color={BCN.teja}>
-        {guardando ? "Guardando…" : "Guardar en nuestra historia"}
-      </Boton>
-    </Hoja>
-  );
-}
 
 const flecha: React.CSSProperties = {
   width: 30, height: 30, borderRadius: "50%", border: "none", background: BCN.arena,
