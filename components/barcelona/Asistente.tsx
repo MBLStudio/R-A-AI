@@ -202,12 +202,24 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
               {/* Conversación */}
               <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px", WebkitOverflowScrolling: "touch" }}>
                 {mensajes.length === 0 ? (
-                  <div style={{ paddingTop: 8 }}>
-                    <p style={{ fontSize: 14.5, color: BCN.tinta, margin: "0 0 6px", lineHeight: 1.6 }}>
+                  <div style={{ paddingTop: 4 }}>
+                    {hayFoto && (
+                      <motion.img
+                        src="/asistente-completo.png" alt=""
+                        initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.45 }}
+                        style={{
+                          display: "block", width: "62%", maxWidth: 210, margin: "0 auto 10px",
+                          filter: "drop-shadow(0 10px 22px rgba(10,26,60,0.28))",
+                        }}
+                      />
+                    )}
+                    <p style={{ fontSize: 15, fontWeight: 600, color: BCN.tinta, margin: "0 0 5px", textAlign: "center" }}>
                       Hola{usuario === "rut" ? " Rut" : " Alejandro"} 👋
                     </p>
-                    <p style={{ fontSize: 13.5, color: BCN.humo, margin: "0 0 18px", lineHeight: 1.6 }}>
-                      Conozco vuestros barrios, planes, pisos y momentos. Preguntadme lo que sea.
+                    <p style={{ fontSize: 13.5, color: BCN.humo, margin: "0 0 18px", lineHeight: 1.6, textAlign: "center" }}>
+                      Conozco vuestros barrios, planes, pisos y momentos.
+                      <br />Preguntadme lo que sea.
                     </p>
                     <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                       {SUGERENCIAS.map((s, i) => (
