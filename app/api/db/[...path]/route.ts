@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { haySesion } from "@/lib/auth";
+import { haySesion, accesoConfigurado } from "@/lib/auth";
 
 /* ============================================================
    Proxy autenticado a Supabase.
@@ -34,12 +34,10 @@ async function reenviar(req: NextRequest, segmentos: string[]) {
     return NextResponse.json({ error: "Supabase sin configurar" }, { status: 503 });
   }
 
-  // Mismo criterio que proxy.ts: sin contraseña configurada no cerramos la
+  // Mismo criterio que proxy.ts: sin acceso configurado no cerramos la
   // puerta. Si no, un despliegue sin variables dejaría la app inservible —
   // y en ese estado no protege menos que antes, porque RLS aún no está activo.
-  const configurado = Boolean(process.env.SESSION_SECRET || process.env.APP_PASSWORD);
-
-  if (configurado && !haySesion(req)) {
+  if (accesoConfigurado() && !haySesion(req)) {
     return NextResponse.json({ error: "Sesión requerida" }, { status: 401 });
   }
 

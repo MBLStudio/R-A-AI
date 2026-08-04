@@ -3,25 +3,31 @@ import { NextRequest } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 
 /* ============================================================
-   Sesión de R&A.
+   Acceso a R&A — enlace mágico.
 
-   Una contraseña compartida (APP_PASSWORD) abre la app. A cambio
-   se emite una cookie httpOnly firmada con HMAC, que es lo que
-   valida el proxy de base de datos y las rutas API.
+   No hay contraseña que escribir. Se abre una vez el enlace
+   secreto (/abrir/<ACCESS_TOKEN>) desde cada móvil y la app
+   queda desbloqueada en ese dispositivo durante 10 años.
 
-   httpOnly = el JavaScript de la página no puede leerla, así que
-   ni una XSS se la lleva.
+   A cambio del enlace se emite una cookie httpOnly firmada con
+   HMAC, que es lo que validan el proxy de base de datos y las
+   rutas API. httpOnly = ni una XSS puede leerla.
    ============================================================ */
 
 export const COOKIE = "ra_session";
-const DIAS = 180;
+const DIAS = 3650; // 10 años: en la práctica, para siempre
 
+/** Secreto con el que se firma la cookie. */
 function secreto(): string {
-  // Si no hay secreto propio, derivamos uno de la contraseña.
-  return process.env.SESSION_SECRET || process.env.APP_PASSWORD || "";
+  return process.env.SESSION_SECRET || process.env.ACCESS_TOKEN || "";
 }
 
-/** Token = <emitido>.<firma>. La firma cubre el timestamp. */
+/** ¿Está el acceso configurado? Si no, no cerramos la puerta. */
+export function accesoConfigurado(): boolean {
+  return Boolean(process.env.SESSION_SECRET || process.env.ACCESS_TOKEN);
+}
+
+/** Token de cookie = <emitido>.<firma>. La firma cubre el timestamp. */
 export function crearToken(): string {
   const emitido = Date.now().toString(36);
   const firma = createHmac("sha256", secreto()).update(emitido).digest("hex");
@@ -36,7 +42,7 @@ export function tokenValido(token: string | undefined): boolean {
 
   const esperada = createHmac("sha256", secreto()).update(emitido).digest("hex");
 
-  // Comparación en tiempo constante: no filtra información por el tiempo de respuesta.
+  // Comparación en tiempo constante: no filtra nada por el tiempo de respuesta.
   const a = Buffer.from(firma, "hex");
   const b = Buffer.from(esperada, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
@@ -56,6 +62,15 @@ export async function haySesionServidor(): Promise<boolean> {
   return tokenValido(store.get(COOKIE)?.value);
 }
 
+/** ¿Es este el enlace bueno? Comparación en tiempo constante. */
+export function enlaceCorrecto(token: string): boolean {
+  const real = process.env.ACCESS_TOKEN;
+  if (!real) return false;
+  const a = createHmac("sha256", "cmp").update(token).digest();
+  const b = createHmac("sha256", "cmp").update(real).digest();
+  return timingSafeEqual(a, b);
+}
+
 export const opcionesCookie = {
   name: COOKIE,
   httpOnly: true,
@@ -64,12 +79,3 @@ export const opcionesCookie = {
   path: "/",
   maxAge: DIAS * 86_400,
 };
-
-/** Compara la contraseña sin filtrar longitud ni contenido por timing. */
-export function contrasenaCorrecta(intento: string): boolean {
-  const real = process.env.APP_PASSWORD;
-  if (!real) return false;
-  const a = createHmac("sha256", "cmp").update(intento).digest();
-  const b = createHmac("sha256", "cmp").update(real).digest();
-  return timingSafeEqual(a, b);
-}

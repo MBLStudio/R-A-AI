@@ -13,11 +13,12 @@ import { NextRequest, NextResponse } from "next/server";
    ============================================================ */
 
 const COOKIE = "ra_session";
-const DIAS = 180;
+const DIAS = 3650; // 10 años
 
 /** Se autentican solas: no las tocamos. */
 const SIN_SESION = [
   "/entrar",
+  "/abrir/",                 // el enlace mágico valida su propio token
   "/api/auth/",
   "/api/db",                 // devuelve 401 JSON por su cuenta
   "/api/push/daily",         // cron (Bearer CRON_SECRET)
@@ -54,9 +55,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const secreto = process.env.SESSION_SECRET || process.env.APP_PASSWORD || "";
+  const secreto = process.env.SESSION_SECRET || process.env.ACCESS_TOKEN || "";
 
-  // Sin contraseña configurada no cerramos la puerta: evita dejar
+  // Sin acceso configurado no cerramos la puerta: evita dejar
   // la app inaccesible por un despliegue a medias.
   if (!secreto) return NextResponse.next();
 
