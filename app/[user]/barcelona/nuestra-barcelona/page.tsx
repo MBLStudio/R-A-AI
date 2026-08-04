@@ -58,7 +58,7 @@ export default function NuestraBarcelonaPage() {
   const fotos = momentos.flatMap((m) => m.fotos).slice(0, 6);
 
   return (
-    <div style={{ minHeight: "100dvh", background: BCN.noche, position: "relative", overflow: "hidden" }}>
+    <div style={{ height: "100dvh", background: BCN.noche, position: "relative", overflow: "hidden" }}>
       {/* Cielo de atardecer */}
       <div style={{
         position: "absolute", top: 0, left: 0, right: 0, height: 380,
@@ -68,7 +68,11 @@ export default function NuestraBarcelonaPage() {
 
       <Estrellas />
 
-      <div style={{ position: "relative", padding: "0 20px", paddingBottom: 80, maxWidth: 640, margin: "0 auto" }}>
+      <div style={{
+        position: "relative", height: "100%", overflowY: "auto", WebkitOverflowScrolling: "touch",
+        padding: "0 20px", paddingBottom: `calc(90px + env(safe-area-inset-bottom))`,
+        maxWidth: 640, margin: "0 auto", boxSizing: "border-box",
+      }}>
         {/* Cabecera */}
         <div style={{ paddingTop: `calc(16px + env(safe-area-inset-top))`, display: "flex", alignItems: "center", gap: 12, marginBottom: 40 }}>
           <button onClick={() => history.back()} aria-label="Volver"

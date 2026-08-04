@@ -21,12 +21,14 @@ export function Pantalla({
 }) {
   const router = useRouter();
   return (
-    <div style={{ minHeight: "100dvh", background: BCN.arena }}>
+    /* El <main> del layout tiene overflow:hidden, así que cada pantalla
+       gestiona su propio scroll. Cabecera fija + cuerpo desplazable. */
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: BCN.arena, overflow: "hidden" }}>
       <div style={{
         background: `linear-gradient(150deg, ${color} 0%, ${sombra(color)} 100%)`,
         padding: "14px 18px 20px",
         paddingTop: `calc(14px + env(safe-area-inset-top))`,
-        position: "sticky", top: 0, zIndex: 20,
+        flexShrink: 0, zIndex: 20,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: 680, margin: "0 auto" }}>
           <button onClick={() => router.back()} aria-label="Volver"
@@ -52,8 +54,11 @@ export function Pantalla({
         </div>
       </div>
 
-      <div style={{ padding: "18px 16px", paddingBottom: `calc(40px + env(safe-area-inset-bottom))`, maxWidth: 680, margin: "0 auto" }}>
-        {children}
+      <div style={{
+        flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch",
+        padding: "18px 16px", paddingBottom: `calc(48px + env(safe-area-inset-bottom))`,
+      }}>
+        <div style={{ maxWidth: 680, margin: "0 auto" }}>{children}</div>
       </div>
     </div>
   );

@@ -97,7 +97,10 @@ export default function BarcelonaPage() {
   const ir = (id: string) => router.push(`/${user}/barcelona/${id}`);
 
   return (
-    <div style={{ minHeight: "100dvh", background: BCN.arena, position: "relative" }}>
+    /* El <main> del layout tiene overflow:hidden: el scroll va aquí dentro. */
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column", background: BCN.arena, position: "relative", overflow: "hidden" }}>
+
+      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
 
       {/* ══ Cabecera ══ */}
       <Cabecera
@@ -107,7 +110,7 @@ export default function BarcelonaPage() {
         onAjustes={() => ir("ajustes")}
       />
 
-      <div style={{ padding: "0 16px", paddingBottom: 140, maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ padding: "0 16px", paddingBottom: `calc(150px + env(safe-area-inset-bottom))`, maxWidth: 680, margin: "0 auto" }}>
 
         {sinEtapa ? (
           <SinEtapa />
@@ -152,6 +155,7 @@ export default function BarcelonaPage() {
             <NuestraBarcelona onClick={() => ir("nuestra-barcelona")} />
           </>
         )}
+      </div>
       </div>
 
       {/* ══ Guardar momento ══ */}
