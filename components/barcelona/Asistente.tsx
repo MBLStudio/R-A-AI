@@ -12,9 +12,9 @@ import type { UserName } from "@/store/userStore";
    oscurece y se abre el copiloto a pantalla casi completa,
    con una X arriba a la derecha para salir.
 
-   El avatar: si existe /asistente.png se usa esa imagen; si
+   El avatar: si existe /asistente.webp se usa esa imagen; si
    no, el futbolista dibujado de abajo. Para cambiarlo basta
-   con dejar el PNG en /public — no hay que tocar código.
+   con dejar el archivo en /public — no hay que tocar código.
    ═══════════════════════════════════════════════════════════ */
 
 interface Mensaje { role: "user" | "assistant"; content: string }
@@ -35,12 +35,12 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
   const [ampliada, setAmpliada] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
 
-  // ¿Han dejado una imagen propia en /public/asistente.png?
+  // ¿Han dejado una imagen propia en /public/asistente.webp?
   useEffect(() => {
     const img = new Image();
     img.onload = () => setHayFoto(true);
     img.onerror = () => setHayFoto(false);
-    img.src = "/asistente.png";
+    img.src = "/asistente.webp";
   }, []);
 
   useEffect(() => {
@@ -210,7 +210,7 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
                   <div style={{ paddingTop: 4 }}>
                     {hayFoto && (
                       <motion.img
-                        src="/asistente-completo.png" alt="Ver la foto completa"
+                        src="/asistente-completo.webp" alt="Ver la foto completa"
                         onClick={() => setAmpliada(true)}
                         initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
                         whileTap={{ scale: 0.97 }}
@@ -300,7 +300,7 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
             }}
           >
             <motion.img
-              src="/asistente-completo.png" alt=""
+              src="/asistente-completo.webp" alt=""
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.94, opacity: 0 }}
@@ -336,14 +336,14 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
 function Avatar({ hayFoto }: { hayFoto: boolean }) {
   if (hayFoto) {
     return (
-      <img src="/asistente.png" alt=""
+      <img src="/asistente.webp" alt=""
         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
     );
   }
   return <Futbolista />;
 }
 
-/** Futbolista blaugrana, dibujado a mano. Sustituible por /asistente.png. */
+/** Futbolista blaugrana, dibujado a mano. Sustituible por /asistente.webp. */
 function Futbolista() {
   return (
     <svg viewBox="0 0 60 60" style={{ width: "100%", height: "100%", display: "block" }} aria-hidden>
