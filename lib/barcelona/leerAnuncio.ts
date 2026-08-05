@@ -396,7 +396,15 @@ function vacio(url: string, portal: string): AnuncioLeido {
   };
 }
 
-export async function leerAnuncio(enlace: string): Promise<ResultadoLectura> {
+/**
+ * @param enlace   la dirección del anuncio
+ * @param htmlDado la página ya descargada. Los portales grandes bloquean
+ *   las peticiones que salen de un servidor, así que cuando quien comparte
+ *   el piso puede descargarla él (el móvil, el navegador), nos la manda y
+ *   aquí solo la interpretamos. Es la única forma de que esto funcione con
+ *   Idealista y Fotocasa.
+ */
+export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<ResultadoLectura> {
   const url = urlValida(enlace);
   if (!url) {
     return { ok: false, motivo: "Eso no parece un enlace válido.", anuncio: vacio(enlace, "manual") };
@@ -407,12 +415,16 @@ export async function leerAnuncio(enlace: string): Promise<ResultadoLectura> {
   const base = vacio(limpio, portal);
   base.portal_id = idDelAnuncio(limpio, portal);
 
-  const bajada = await descargar(limpio);
-  if ("fallo" in bajada) {
-    return { ok: false, motivo: bajada.fallo, anuncio: base };
+  let html: string;
+  if (htmlDado && htmlDado.length > 500) {
+    html = htmlDado;
+  } else {
+    const bajada = await descargar(limpio);
+    if ("fallo" in bajada) {
+      return { ok: false, motivo: bajada.fallo, anuncio: base };
+    }
+    html = bajada.html;
   }
-
-  const html = bajada.html;
   const fichas = fichasDe(html);
   const texto = soloTexto(html).slice(0, 20_000);
 

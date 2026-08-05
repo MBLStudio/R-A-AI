@@ -43,6 +43,8 @@ interface PisoEntrante {
   exterior?: boolean;
   direccion?: string;
   barrio?: string;          // nombre; se resuelve contra bcn_barrios
+  /** La página ya descargada por quien comparte el piso, si la manda. */
+  html?: string;
   lat?: number;
   lng?: number;
   fotos?: string[];
@@ -69,13 +71,18 @@ export async function POST(req: NextRequest) {
 
   try {
     let piso = (await req.json()) as PisoEntrante;
+    let motivoLectura: string | null = null;
 
     // Si solo nos mandan el enlace —el Atajo del iPhone y el marcador
     // hacen eso—, lo leemos aquí y seguimos como si viniera entero.
     // Puede llegar con texto alrededor, tal cual sale de compartir.
     if (!piso?.titulo?.trim() && piso?.url) {
       const suelto = piso.url.match(/https?:\/\/[^\s"'<>]+/);
-      const { anuncio } = await leerAnuncio(suelto ? suelto[0] : piso.url);
+      const { anuncio, ...resto } = await leerAnuncio(
+        suelto ? suelto[0] : piso.url,
+        typeof piso.html === "string" ? piso.html : undefined
+      );
+      if (!resto.ok) motivoLectura = resto.motivo;
       piso = {
         ...piso,
         titulo: anuncio.titulo ?? anuncio.direccion ?? "Piso por revisar",
@@ -177,7 +184,7 @@ export async function POST(req: NextRequest) {
 
     const resumen = detalles.length
       ? detalles.join(" · ")
-      : "Sin datos: entra y complétalo";
+      : `Sin datos${motivoLectura ? `: ${motivoLectura}` : ""} Entra y complétalo.`;
 
     if (existente) {
       // No pisamos el estado: si ya lo habían descartado o marcado favorito, se respeta.
