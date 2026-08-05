@@ -59,8 +59,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // El nombre del esquema no distingue mayúsculas (lo dice el estándar), y
+  // los Atajos del iPhone lo escriben en minúscula. Comparamos solo el token.
   const auth = req.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${esperado}`) {
+  const recibido = auth.replace(/^bearer\s+/i, "").trim();
+  if (!recibido || recibido !== esperado) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401, headers: CORS });
   }
 
