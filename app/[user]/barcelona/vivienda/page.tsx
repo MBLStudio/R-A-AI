@@ -210,6 +210,35 @@ function TarjetaPiso({ piso, barrio, compat, delay, expandido, onToggle, onEstad
             style={{ overflow: "hidden" }}
           >
             <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${BCN.arena}` }}>
+              {piso.fotos.length > 1 && (
+                <div style={{
+                  display: "flex", gap: 7, overflowX: "auto", margin: "12px -16px 0",
+                  padding: "0 16px 4px", scrollSnapType: "x mandatory",
+                }}>
+                  {piso.fotos.slice(1).map((foto, i) => (
+                    <a key={foto} href={foto} target="_blank" rel="noopener noreferrer"
+                      style={{ flexShrink: 0, scrollSnapAlign: "start", display: "block" }}>
+                      <img src={foto} alt={`Foto ${i + 2}`} loading="lazy"
+                        style={{
+                          width: 128, height: 96, objectFit: "cover", borderRadius: 10,
+                          border: `1px solid ${BCN.arenaOsc}`, display: "block", background: BCN.arena,
+                        }} />
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {(piso.banos || piso.planta || piso.ascensor !== null || piso.amueblado !== null || piso.exterior !== null) && (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+                  {piso.banos ? <Detalle>{piso.banos} {piso.banos === 1 ? "baño" : "baños"}</Detalle> : null}
+                  {piso.planta ? <Detalle>Planta {piso.planta}</Detalle> : null}
+                  {piso.ascensor !== null ? <Detalle si={piso.ascensor}>{piso.ascensor ? "Con ascensor" : "Sin ascensor"}</Detalle> : null}
+                  {piso.amueblado !== null ? <Detalle si={piso.amueblado}>{piso.amueblado ? "Amueblado" : "Sin amueblar"}</Detalle> : null}
+                  {piso.exterior !== null ? <Detalle si={piso.exterior}>{piso.exterior ? "Exterior" : "Interior"}</Detalle> : null}
+                  {piso.precio && piso.m2 ? <Detalle>{Math.round(piso.precio / piso.m2)} €/m²</Detalle> : null}
+                </div>
+              )}
+
               {piso.descripcion && (
                 <p style={{ fontSize: 13.5, color: BCN.tinta, margin: "12px 0 0", lineHeight: 1.55 }}>{piso.descripcion}</p>
               )}
@@ -526,6 +555,20 @@ function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGua
         {guardando ? "Guardando…" : "Guardar piso"}
       </Boton>
     </Hoja>
+  );
+}
+
+/** Un dato suelto del piso. En verde lo que suma, apagado lo que resta. */
+function Detalle({ children, si }: { children: React.ReactNode; si?: boolean }) {
+  const color = si === undefined ? BCN.humo : si ? BCN.oliva : BCN.humo;
+  return (
+    <span style={{
+      fontSize: 12, padding: "5px 10px", borderRadius: 8,
+      background: si ? `${BCN.oliva}14` : BCN.arena,
+      color, fontWeight: si ? 600 : 500,
+    }}>
+      {children}
+    </span>
   );
 }
 

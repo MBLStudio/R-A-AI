@@ -121,16 +121,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No hay ninguna etapa activa" }, { status: 404, headers: CORS });
     }
 
-    // Resolver el barrio por nombre, si viene
+    // Resolver el barrio por nombre. Los portales lo escriben a su manera
+    // («La Prosperitat», «Vila de Gràcia», «Eixample Dreta»), así que no
+    // basta con buscar la coincidencia exacta: se compara sin artículos y
+    // aceptando que uno contenga al otro.
     let barrioId: string | null = null;
     if (piso.barrio) {
-      const { data: b } = await supabase
+      const { data: barrios } = await supabase
         .from("bcn_barrios")
-        .select("id")
-        .eq("etapa_id", etapa.id)
-        .ilike("nombre", piso.barrio.trim())
-        .maybeSingle();
-      barrioId = b?.id ?? null;
+        .select("id, nombre")
+        .eq("etapa_id", etapa.id);
+
+      const normalizar = (t: string) =>
+        t.toLowerCase()
+          .normalize("NFD").replace(/[̀-ͯ]/g, "")
+          .replace(/^(el|la|els|les|los|las)\s+/, "")
+          .replace(/[^a-z0-9\s]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+      const buscado = normalizar(piso.barrio);
+      const lista = (barrios ?? []) as { id: string; nombre: string }[];
+
+      const encontrado =
+        lista.find((b) => normalizar(b.nombre) === buscado) ??
+        lista.find((b) => {
+          const n = normalizar(b.nombre);
+          return n.length > 3 && (buscado.includes(n) || n.includes(buscado));
+        });
+
+      barrioId = encontrado?.id ?? null;
     }
 
     // ¿Ya lo teníamos? Se identifica por portal + portal_id, o por url

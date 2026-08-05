@@ -289,7 +289,42 @@ function textoDe(v: unknown): string | null {
 }
 
 /** Iconos, logos y banderitas: no son fotos del piso. */
-const NO_ES_FOTO = /favicon|logo|sprite|placeholder|banner|\.svg(\?|$)|\/icons?\//i;
+const NO_ES_FOTO =
+  /favicon|logo|sprite|placeholder|banner|avatar|badge|\.svg(\?|$)|\/icons?\/|\/assets\/|\/static\/(?:js|css)\//i;
+
+/**
+ * Las fotos del piso, rebuscadas en la página entera.
+ *
+ * La etiqueta de compartir solo trae la portada, pero un anuncio tiene
+ * veinte fotos y son media decisión. Casi todas cuelgan del mismo sitio
+ * que la portada, así que la usamos de guía: nos quedamos con las que
+ * comparten servidor con ella y descartamos el resto.
+ */
+function fotosDelHtml(html: string, portada: string | null): string[] {
+  const patron = /https?:(?:\\?\/){2}[^\s"'<>\\)]+?\.(?:jpe?g|png|webp)(?:\?[^\s"'<>\\)]*)?/gi;
+
+  const todas = [...html.matchAll(patron)]
+    .map((m) => m[0].replace(/\\\//g, "/"))
+    .filter((u) => !NO_ES_FOTO.test(u));
+
+  let candidatas = todas;
+
+  // Si sabemos de qué servidor sale la portada, nos ceñimos a él
+  if (portada) {
+    try {
+      const casa = new URL(portada).host;
+      const mismas = todas.filter((u) => {
+        try { return new URL(u).host === casa; } catch { return false; }
+      });
+      if (mismas.length) candidatas = mismas;
+    } catch { /* portada rara: seguimos con todas */ }
+  }
+
+  // Un anuncio serio no repite la misma foto en versiones de 90 píxeles
+  const buenas = candidatas.filter((u) => !/\b(?:thumb|mini|small|60x|90x|120x)\b/i.test(u));
+
+  return [...new Set(buenas.length ? buenas : candidatas)].slice(0, 12);
+}
 
 function imagenesDe(v: unknown, tope = 8): string[] {
   const salida: string[] = [];
@@ -506,9 +541,14 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
   }
 
   // ── Fotos ─────────────────────────────────────────────────
-  const fotos = imagenesDe(campo(fichas, "image", "photo"));
   const portada = meta(html, "og:image");
+  const fotos = imagenesDe(campo(fichas, "image", "photo"));
   if (portada && !NO_ES_FOTO.test(portada) && !fotos.includes(portada)) fotos.unshift(portada);
+
+  // La ficha rara vez trae más de una: el resto hay que buscarlas
+  for (const foto of fotosDelHtml(html, portada ?? fotos[0] ?? null)) {
+    if (!fotos.includes(foto)) fotos.push(foto);
+  }
 
   // ── Los extras ────────────────────────────────────────────
   // Primero la ficha de características («Ascensor Sí»), que es un dato;
@@ -549,7 +589,7 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
     exterior,
     direccion,
     barrio,
-    fotos: fotos.slice(0, 8),
+    fotos: fotos.slice(0, 12),
     descripcion: descripcion ? descripcion.slice(0, 1200) : null,
     fuente,
     faltan: [],
