@@ -108,6 +108,15 @@ export default function ViviendaPage() {
               onEstado={async (estado) => { await updatePiso(p.id, { estado }); await cargar(); }}
               onValorar={() => setValorando(p)}
               onBorrar={async () => { await deletePiso(p.id); await cargar(); }}
+              onPortada={async (indice) => {
+                const fotos = [p.fotos[indice], ...p.fotos.filter((_, j) => j !== indice)];
+                await updatePiso(p.id, { fotos });
+                await cargar();
+              }}
+              onQuitarFoto={async (indice) => {
+                await updatePiso(p.id, { fotos: p.fotos.filter((_, j) => j !== indice) });
+                await cargar();
+              }}
             />
           ))}
 
@@ -142,10 +151,11 @@ export default function ViviendaPage() {
 
 /* ─── Tarjeta ──────────────────────────────────────────────── */
 
-function TarjetaPiso({ piso, barrio, compat, delay, expandido, onToggle, onEstado, onValorar, onBorrar }: {
+function TarjetaPiso({ piso, barrio, compat, delay, expandido, onToggle, onEstado, onValorar, onBorrar, onPortada, onQuitarFoto }: {
   piso: Piso; barrio: Barrio | null; compat: ReturnType<typeof calcularCompatibilidad>;
   delay: number; expandido: boolean;
   onToggle: () => void; onEstado: (e: EstadoPiso) => void; onValorar: () => void; onBorrar: () => void;
+  onPortada: (indice: number) => void; onQuitarFoto: (indice: number) => void;
 }) {
   const cfg = ESTADO_PISO[piso.estado];
 
@@ -211,21 +221,48 @@ function TarjetaPiso({ piso, barrio, compat, delay, expandido, onToggle, onEstad
           >
             <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${BCN.arena}` }}>
               {piso.fotos.length > 1 && (
-                <div style={{
-                  display: "flex", gap: 7, overflowX: "auto", margin: "12px -16px 0",
-                  padding: "0 16px 4px", scrollSnapType: "x mandatory",
-                }}>
-                  {piso.fotos.slice(1).map((foto, i) => (
-                    <a key={foto} href={foto} target="_blank" rel="noopener noreferrer"
-                      style={{ flexShrink: 0, scrollSnapAlign: "start", display: "block" }}>
-                      <img src={foto} alt={`Foto ${i + 2}`} loading="lazy"
-                        style={{
-                          width: 128, height: 96, objectFit: "cover", borderRadius: 10,
-                          border: `1px solid ${BCN.arenaOsc}`, display: "block", background: BCN.arena,
-                        }} />
-                    </a>
-                  ))}
-                </div>
+                <>
+                  <p style={{ fontSize: 11.5, color: BCN.humo, margin: "12px 0 7px", lineHeight: 1.45 }}>
+                    Tocad una para ponerla de portada. La × la quita, por si es
+                    un cartel o el plano del portal.
+                  </p>
+                  <div style={{
+                    display: "flex", gap: 7, overflowX: "auto", margin: "0 -16px",
+                    padding: "0 16px 6px", scrollSnapType: "x mandatory",
+                  }}>
+                    {piso.fotos.map((foto, i) => (
+                      <div key={foto} style={{ position: "relative", flexShrink: 0, scrollSnapAlign: "start" }}>
+                        <button onClick={() => onPortada(i)} aria-label={`Poner la foto ${i + 1} de portada`}
+                          style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                          <img src={foto} alt="" loading="lazy"
+                            style={{
+                              width: 128, height: 96, objectFit: "cover", borderRadius: 10,
+                              border: i === 0 ? `2.5px solid ${BCN.teja}` : `1px solid ${BCN.arenaOsc}`,
+                              display: "block", background: BCN.arena,
+                            }} />
+                        </button>
+                        {i === 0 && (
+                          <span style={{
+                            position: "absolute", bottom: 6, left: 6, padding: "2px 7px",
+                            borderRadius: 6, background: BCN.teja, color: "white",
+                            fontSize: 9.5, fontWeight: 700,
+                          }}>
+                            Portada
+                          </span>
+                        )}
+                        <button onClick={() => onQuitarFoto(i)} aria-label="Quitar esta foto"
+                          style={{
+                            position: "absolute", top: 5, right: 5, width: 22, height: 22,
+                            borderRadius: "50%", border: "none", cursor: "pointer",
+                            background: "rgba(0,0,0,0.55)", color: "white",
+                            fontSize: 13, lineHeight: 1, padding: 0,
+                          }}>
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
 
               {(piso.banos || piso.planta || piso.ascensor !== null || piso.amueblado !== null || piso.exterior !== null) && (

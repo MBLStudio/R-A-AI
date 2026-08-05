@@ -496,11 +496,24 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
     valorDe(campo(fichas, "numberOfBathroomsTotal", "numberOfBathrooms")) ?? primero(banosDelTexto);
 
   // ── Título y descripción ──────────────────────────────────
-  const titulo =
+  // Los portales titulan fatal: «Piso de alquiler en N/a, La Prosperitat,
+  // Barcelona Capital | fotocasa». Nos quedamos con lo que dice algo.
+  let titulo: string | null =
     meta(html, "og:title") ??
     textoDe(campo(fichas, "name", "headline")) ??
     limpiar(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "") ??
     null;
+
+  if (titulo) {
+    titulo = titulo
+      .replace(/\s*[|·–—-]\s*(fotocasa|idealista|habitaclia|pisos\.com|milanuncios|enalquiler|yaencontre|spotahome|rentumo)\b.*$/i, "")
+      .replace(/\bn\/a\b[,\s]*/gi, "")
+      .replace(/\s*,\s*(?=,)/g, "")
+      .replace(/^[\s,·-]+|[\s,·-]+$/g, "")
+      .replace(/,\s*barcelona\s*(capital)?\s*$/i, "")
+      .trim();
+    if (titulo.length < 4) titulo = null;
+  }
 
   const descripcion =
     textoDe(campo(fichas, "description")) ?? meta(html, "og:description") ?? meta(html, "description");
@@ -575,6 +588,17 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
 
   if (fuente === "nada" && (m2 !== null || habitaciones !== null)) fuente = fichas.length ? "ficha" : "texto";
   if (fuente === "nada" && titulo) fuente = "compartir";
+
+  // Si después de limpiar no queda título, lo escribimos nosotros con lo
+  // que sí sabemos. Vale más «Piso en Gràcia · 75 m²» que «Piso por revisar».
+  if (!titulo) {
+    const piezas = [
+      habitaciones ? `Piso de ${habitaciones} hab` : "Piso",
+      barrio ? `en ${barrio}` : null,
+      !barrio && m2 ? `de ${m2} m²` : null,
+    ].filter(Boolean);
+    titulo = piezas.join(" ");
+  }
 
   const anuncio: AnuncioLeido = {
     ...base,
