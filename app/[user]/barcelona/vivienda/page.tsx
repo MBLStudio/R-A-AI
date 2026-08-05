@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
@@ -31,8 +31,20 @@ export default function ViviendaPage() {
   const [expandido, setExpandido] = useState<string | null>(null);
   const [anadiendo, setAnadiendo] = useState(false);
   const [valorando, setValorando] = useState<Piso | null>(null);
+  const [enlaceEntrante, setEnlaceEntrante] = useState<string | null>(null);
 
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
+
+  // El marcador del ordenador y el Atajo del iPhone nos mandan aquí con
+  // ?piso=<enlace>. Abrimos el formulario ya leyéndolo y quitamos el
+  // parámetro de la barra, para que al recargar no se repita.
+  useEffect(() => {
+    const entrante = new URLSearchParams(window.location.search).get("piso");
+    if (!entrante) return;
+    setEnlaceEntrante(entrante);
+    setAnadiendo(true);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   const cargar = useCallback(async () => {
     const e = await getEtapaActiva();
@@ -111,8 +123,9 @@ export default function ViviendaPage() {
         abierta={anadiendo}
         etapaId={etapa?.id ?? null}
         barrios={barrios}
-        onCerrar={() => setAnadiendo(false)}
-        onGuardado={async () => { setAnadiendo(false); await cargar(); }}
+        enlaceEntrante={enlaceEntrante}
+        onCerrar={() => { setAnadiendo(false); setEnlaceEntrante(null); }}
+        onGuardado={async () => { setAnadiendo(false); setEnlaceEntrante(null); await cargar(); }}
       />
 
       <HojaValorarPiso
@@ -289,8 +302,9 @@ function Ecosistema() {
 
 /* ─── Hojas ────────────────────────────────────────────────── */
 
-function HojaAnadir({ abierta, etapaId, barrios, onCerrar, onGuardado }: {
+function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGuardado }: {
   abierta: boolean; etapaId: string | null; barrios: Barrio[];
+  enlaceEntrante?: string | null;
   onCerrar: () => void; onGuardado: () => void;
 }) {
   const [titulo, setTitulo] = useState("");
@@ -298,10 +312,99 @@ function HojaAnadir({ abierta, etapaId, barrios, onCerrar, onGuardado }: {
   const [precio, setPrecio] = useState("");
   const [m2, setM2] = useState("");
   const [hab, setHab] = useState("");
+  const [banos, setBanos] = useState("");
+  const [planta, setPlanta] = useState("");
+  const [ascensor, setAscensor] = useState<boolean | null>(null);
+  const [amueblado, setAmueblado] = useState<boolean | null>(null);
+  const [exterior, setExterior] = useState<boolean | null>(null);
   const [direccion, setDireccion] = useState("");
   const [barrioId, setBarrioId] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [guardando, setGuardando] = useState(false);
+
+  // Lo que trae el lector y no se enseña: de dónde viene y las fotos.
+  const [extra, setExtra] = useState<Partial<Piso>>({});
+  const [leyendo, setLeyendo] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [leido, setLeido] = useState(false);
+
+  /** Pega el enlace y que la app rellene lo que pueda. */
+  const leer = async (forzado?: string) => {
+    const enlace = (forzado ?? url).trim();
+    if (!enlace || leyendo) return;
+    setLeyendo(true);
+    setAviso(null);
+
+    try {
+      const res = await fetch("/api/barcelona/leer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: enlace }),
+      });
+      const datos = await res.json();
+      const a = datos?.anuncio;
+
+      if (!a) {
+        setAviso("No hemos podido abrir ese enlace. Puedes rellenarlo a mano.");
+        return;
+      }
+
+      if (a.url) setUrl(a.url);
+      if (a.titulo) setTitulo(a.titulo);
+      if (a.precio) setPrecio(String(a.precio));
+      if (a.m2) setM2(String(a.m2));
+      if (a.habitaciones !== null) setHab(String(a.habitaciones));
+      if (a.banos !== null) setBanos(String(a.banos));
+      if (a.planta) setPlanta(a.planta);
+      if (a.ascensor !== null) setAscensor(a.ascensor);
+      if (a.amueblado !== null) setAmueblado(a.amueblado);
+      if (a.exterior !== null) setExterior(a.exterior);
+      if (a.direccion) setDireccion(a.direccion);
+      if (a.descripcion && !descripcion) setDescripcion(a.descripcion);
+
+      // El barrio viene por nombre; lo cruzamos con los vuestros
+      if (a.barrio) {
+        const suyo = barrios.find(
+          (b) =>
+            b.nombre.toLowerCase() === a.barrio.toLowerCase() ||
+            a.barrio.toLowerCase().includes(b.nombre.toLowerCase()) ||
+            b.nombre.toLowerCase().includes(a.barrio.toLowerCase())
+        );
+        if (suyo) setBarrioId(suyo.id);
+      }
+
+      setExtra({
+        portal: a.portal ?? null,
+        portal_id: a.portal_id ?? null,
+        fotos: Array.isArray(a.fotos) ? a.fotos : [],
+      });
+
+      setLeido(true);
+      setAviso(datos.ok ? null : (datos.motivo ?? null));
+    } catch {
+      setAviso("No hemos podido conectar. Puedes rellenarlo a mano.");
+    } finally {
+      setLeyendo(false);
+    }
+  };
+
+  const limpiar = () => {
+    setTitulo(""); setUrl(""); setPrecio(""); setM2(""); setHab("");
+    setBanos(""); setPlanta(""); setAscensor(null); setAmueblado(null); setExterior(null);
+    setDireccion(""); setBarrioId(""); setDescripcion("");
+    setExtra({}); setAviso(null); setLeido(false);
+  };
+
+  // Si venimos del marcador del ordenador o del Atajo del móvil, el enlace
+  // ya viene puesto: lo leemos solo, sin que nadie toque nada.
+  const yaLanzado = useRef<string | null>(null);
+  useEffect(() => {
+    if (!abierta || !enlaceEntrante || yaLanzado.current === enlaceEntrante) return;
+    yaLanzado.current = enlaceEntrante;
+    setUrl(enlaceEntrante);
+    leer(enlaceEntrante);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierta, enlaceEntrante]);
 
   const guardar = async () => {
     if (!etapaId || !titulo.trim()) return;
@@ -309,7 +412,9 @@ function HojaAnadir({ abierta, etapaId, barrios, onCerrar, onGuardado }: {
     await addPiso(etapaId, {
       titulo: titulo.trim(),
       url: url.trim() || null,
-      portal: url.includes("idealista") ? "idealista" : url.includes("fotocasa") ? "fotocasa" : "manual",
+      portal:
+        extra.portal ??
+        (url.includes("idealista") ? "idealista" : url.includes("fotocasa") ? "fotocasa" : "manual"),
       precio: precio ? Number(precio) : null,
       m2: m2 ? Number(m2) : null,
       habitaciones: hab ? Number(hab) : null,
@@ -317,19 +422,62 @@ function HojaAnadir({ abierta, etapaId, barrios, onCerrar, onGuardado }: {
       barrio_id: barrioId || null,
       descripcion: descripcion.trim() || null,
       estado: "nuevo",
+      portal_id: extra.portal_id ?? null,
+      banos: banos ? Number(banos) : null,
+      planta: planta.trim() || null,
+      ascensor,
+      amueblado,
+      exterior,
+      fotos: extra.fotos ?? [],
     });
-    setTitulo(""); setUrl(""); setPrecio(""); setM2(""); setHab(""); setDireccion(""); setBarrioId(""); setDescripcion("");
+    limpiar();
     setGuardando(false);
     onGuardado();
   };
 
   return (
     <Hoja abierta={abierta} onCerrar={onCerrar} titulo="Añadir un piso">
+      <Campo label="Enlace del anuncio">
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            value={url}
+            onChange={(e) => { setUrl(e.target.value); setLeido(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") leer(); }}
+            placeholder="Pega aquí el enlace…"
+            inputMode="url"
+            autoCapitalize="off"
+            autoCorrect="off"
+            style={{ ...estiloInput, flex: 1, minWidth: 0 }}
+          />
+          <button
+            onClick={() => leer()}
+            disabled={!url.trim() || leyendo}
+            style={{
+              padding: "0 16px", borderRadius: 12, border: "none", flexShrink: 0,
+              background: url.trim() && !leyendo ? BCN.teja : BCN.arenaOsc,
+              color: url.trim() && !leyendo ? "white" : BCN.humo,
+              fontSize: 14, fontWeight: 600,
+              cursor: url.trim() && !leyendo ? "pointer" : "default",
+            }}
+          >
+            {leyendo ? "Leyendo…" : "Leer"}
+          </button>
+        </div>
+      </Campo>
+
+      {leido && !aviso && (
+        <p style={{ fontSize: 12.5, color: BCN.oliva, margin: "-6px 0 14px", lineHeight: 1.5 }}>
+          Anuncio leído. Repasad que esté todo bien antes de guardar.
+        </p>
+      )}
+      {aviso && (
+        <p style={{ fontSize: 12.5, color: BCN.humo, margin: "-6px 0 14px", lineHeight: 1.5 }}>
+          {aviso} Rellenad lo que falte y se guarda igual.
+        </p>
+      )}
+
       <Campo label="Título">
         <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ático en Sant Antoni" style={estiloInput} />
-      </Campo>
-      <Campo label="Enlace del anuncio">
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://idealista.com/…" style={estiloInput} />
       </Campo>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}><Campo label="€/mes">
@@ -338,10 +486,27 @@ function HojaAnadir({ abierta, etapaId, barrios, onCerrar, onGuardado }: {
         <div style={{ flex: 1 }}><Campo label="m²">
           <input type="number" inputMode="numeric" value={m2} onChange={(e) => setM2(e.target.value)} style={estiloInput} />
         </Campo></div>
-        <div style={{ flex: 1 }}><Campo label="Hab.">
+      </div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><Campo label="Habitaciones">
           <input type="number" inputMode="numeric" value={hab} onChange={(e) => setHab(e.target.value)} style={estiloInput} />
         </Campo></div>
+        <div style={{ flex: 1 }}><Campo label="Baños">
+          <input type="number" inputMode="numeric" value={banos} onChange={(e) => setBanos(e.target.value)} style={estiloInput} />
+        </Campo></div>
+        <div style={{ flex: 1 }}><Campo label="Planta">
+          <input value={planta} onChange={(e) => setPlanta(e.target.value)} placeholder="3ª" style={estiloInput} />
+        </Campo></div>
       </div>
+
+      <Campo label="Cómo es">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Interruptor etiqueta="Ascensor" valor={ascensor} onCambio={setAscensor} />
+          <Interruptor etiqueta="Amueblado" valor={amueblado} onCambio={setAmueblado} />
+          <Interruptor etiqueta="Exterior" valor={exterior} onCambio={setExterior} />
+        </div>
+      </Campo>
       <Campo label="Dirección">
         <input value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Carrer de…" style={estiloInput} />
       </Campo>
@@ -361,6 +526,38 @@ function HojaAnadir({ abierta, etapaId, barrios, onCerrar, onGuardado }: {
         {guardando ? "Guardando…" : "Guardar piso"}
       </Boton>
     </Hoja>
+  );
+}
+
+/**
+ * Sí / No / no lo sabemos. Tres estados, porque «no lo pone en el anuncio»
+ * no es lo mismo que «no tiene». Se toca para ir cambiando.
+ */
+function Interruptor({ etiqueta, valor, onCambio }: {
+  etiqueta: string; valor: boolean | null; onCambio: (v: boolean | null) => void;
+}) {
+  const siguiente = valor === null ? true : valor ? false : null;
+  const color = valor === null ? BCN.humo : valor ? BCN.oliva : BCN.teja;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onCambio(siguiente)}
+      aria-label={`${etiqueta}: ${valor === null ? "sin saber" : valor ? "sí" : "no"}`}
+      style={{
+        display: "flex", alignItems: "center", gap: 7,
+        padding: "9px 14px", borderRadius: 11, cursor: "pointer",
+        border: `1.5px ${valor === null ? "dashed" : "solid"} ${color}`,
+        background: valor === null ? "transparent" : `${color}18`,
+        color: valor === null ? BCN.humo : color,
+        fontSize: 13.5, fontWeight: valor === null ? 500 : 600,
+      }}
+    >
+      {etiqueta}
+      <span style={{ fontSize: 12, opacity: 0.9 }}>
+        {valor === null ? "—" : valor ? "sí" : "no"}
+      </span>
+    </button>
   );
 }
 
