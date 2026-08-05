@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { leerAnuncio } from "@/lib/barcelona/leerAnuncio";
 
 /* ============================================================
-   Puerta de entrada para la extensión de Chrome.
+   Puerta de entrada desde fuera de la app.
 
-   Idealista / Fotocasa → extensión → aquí → ficha viva en R&A.
+   La usan el Atajo del iPhone, el marcador del ordenador y la
+   extensión. Se puede mandar de dos maneras:
+
+     · Solo el enlace  → lo leemos aquí y lo guardamos.
+     · La ficha entera → la guardamos tal cual.
 
    Protegido con un token compartido (BARCELONA_INGEST_TOKEN).
    Sin él no entra nada: este endpoint es público.
    ============================================================ */
+
+export const maxDuration = 25;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -58,7 +65,34 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const piso = (await req.json()) as PisoEntrante;
+    let piso = (await req.json()) as PisoEntrante;
+
+    // Si solo nos mandan el enlace —el Atajo del iPhone y el marcador
+    // hacen eso—, lo leemos aquí y seguimos como si viniera entero.
+    // Puede llegar con texto alrededor, tal cual sale de compartir.
+    if (!piso?.titulo?.trim() && piso?.url) {
+      const suelto = piso.url.match(/https?:\/\/[^\s"'<>]+/);
+      const { anuncio } = await leerAnuncio(suelto ? suelto[0] : piso.url);
+      piso = {
+        ...piso,
+        titulo: anuncio.titulo ?? anuncio.direccion ?? "Piso por revisar",
+        url: anuncio.url,
+        portal: anuncio.portal,
+        portal_id: anuncio.portal_id ?? undefined,
+        precio: anuncio.precio ?? undefined,
+        m2: anuncio.m2 ?? undefined,
+        habitaciones: anuncio.habitaciones ?? undefined,
+        banos: anuncio.banos ?? undefined,
+        planta: anuncio.planta ?? undefined,
+        ascensor: anuncio.ascensor ?? undefined,
+        amueblado: anuncio.amueblado ?? undefined,
+        exterior: anuncio.exterior ?? undefined,
+        direccion: anuncio.direccion ?? undefined,
+        barrio: anuncio.barrio ?? undefined,
+        fotos: anuncio.fotos,
+        descripcion: anuncio.descripcion ?? undefined,
+      };
+    }
 
     if (!piso?.titulo?.trim()) {
       return NextResponse.json({ error: "Falta el título" }, { status: 400, headers: CORS });
@@ -129,11 +163,27 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
+    // Una frase corta para la notificación del móvil, que es lo único
+    // que va a ver quien comparte el piso desde Idealista.
+    const detalles = [
+      piso.precio ? `${piso.precio.toLocaleString("es-ES")} €` : null,
+      piso.m2 ? `${piso.m2} m²` : null,
+      piso.habitaciones ? `${piso.habitaciones} hab` : null,
+      piso.barrio ?? null,
+    ].filter(Boolean);
+
+    const resumen = detalles.length
+      ? detalles.join(" · ")
+      : "Sin datos: entra y complétalo";
+
     if (existente) {
       // No pisamos el estado: si ya lo habían descartado o marcado favorito, se respeta.
       const { error } = await supabase.from("bcn_pisos").update(campos).eq("id", existente.id);
       if (error) throw error;
-      return NextResponse.json({ id: existente.id, creado: false }, { headers: CORS });
+      return NextResponse.json(
+        { id: existente.id, creado: false, mensaje: `Ya lo teníais · ${resumen}` },
+        { headers: CORS }
+      );
     }
 
     const { data, error } = await supabase
@@ -143,7 +193,10 @@ export async function POST(req: NextRequest) {
       .single();
     if (error) throw error;
 
-    return NextResponse.json({ id: data.id, creado: true }, { headers: CORS });
+    return NextResponse.json(
+      { id: data.id, creado: true, mensaje: `Piso guardado · ${resumen}` },
+      { headers: CORS }
+    );
   } catch (error) {
     console.error("Barcelona ingesta error:", error);
     return NextResponse.json({ error: "Error guardando el piso" }, { status: 500, headers: CORS });
