@@ -110,20 +110,42 @@ function urlValida(entrada: string): URL | null {
 
 /* ─── Descargar la página ───────────────────────────────────── */
 
-const NAVEGADOR = {
-  "User-Agent":
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+/**
+ * Con quién nos presentamos, por orden.
+ *
+ * Primero un navegador normal. Si nos cierran la puerta, probamos como los
+ * bots que generan la vista previa de los enlaces: a esos los portales sí
+ * los dejan pasar, porque les interesa que sus anuncios se vean bien
+ * cuando alguien los comparte por WhatsApp. Es la puerta de servicio.
+ */
+const AGENTES = [
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "WhatsApp/2.23.20.0 A",
+  "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+  "TelegramBot (like TwitterBot)",
+];
+
+const CABECERAS = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "Accept-Language": "es-ES,es;q=0.9,ca;q=0.8,en;q=0.7",
   "Cache-Control": "no-cache",
 };
 
-async function descargar(url: string): Promise<{ html: string } | { fallo: string }> {
+/** ¿Esto es una ficha de piso o la pantalla de «no eres humano»? */
+function pareceUnAnuncio(html: string): boolean {
+  return html.length > 5_000 && /og:image|og:title|<img|application\/ld\+json/i.test(html);
+}
+
+async function unIntento(url: string, agente: string): Promise<{ html: string } | { fallo: string }> {
   const corte = new AbortController();
-  const reloj = setTimeout(() => corte.abort(), 12_000);
+  const reloj = setTimeout(() => corte.abort(), 11_000);
   try {
-    const res = await fetch(url, { headers: NAVEGADOR, redirect: "follow", signal: corte.signal });
-    if (res.status === 403 || res.status === 429) {
+    const res = await fetch(url, {
+      headers: { "User-Agent": agente, ...CABECERAS },
+      redirect: "follow",
+      signal: corte.signal,
+    });
+    if (res.status === 403 || res.status === 429 || res.status >= 500) {
       return { fallo: "El portal no nos deja leer el anuncio desde aquí." };
     }
     if (!res.ok) return { fallo: `El anuncio no responde (error ${res.status}).` };
@@ -136,6 +158,24 @@ async function descargar(url: string): Promise<{ html: string } | { fallo: strin
   } finally {
     clearTimeout(reloj);
   }
+}
+
+async function descargar(url: string): Promise<{ html: string } | { fallo: string }> {
+  let ultimoFallo = "El portal no nos deja leer el anuncio desde aquí.";
+
+  for (const agente of AGENTES) {
+    const intento = await unIntento(url, agente);
+    if ("html" in intento) {
+      if (pareceUnAnuncio(intento.html)) return intento;
+      ultimoFallo = "El portal nos ha devuelto una página vacía.";
+      continue;
+    }
+    ultimoFallo = intento.fallo;
+    // Si el enlace no es válido no hay nada que reintentar
+    if (intento.fallo.includes("no lleva a un anuncio")) break;
+  }
+
+  return { fallo: ultimoFallo };
 }
 
 /* ─── Ayudas de texto ───────────────────────────────────────── */
