@@ -202,6 +202,16 @@ export async function POST(req: NextRequest) {
       piso.barrio ?? null,
     ].filter(Boolean);
 
+    // Cuando quien comparte nos manda la página, iOS a veces la convierte a
+    // texto y se lleva por delante las etiquetas: entonces llegan el precio y
+    // los metros pero ni el título ni las fotos. Merece la pena decirlo.
+    const fotosGuardadas = (piso.fotos ?? []).length;
+    if (fotosGuardadas > 0) {
+      detalles.push(`${fotosGuardadas} ${fotosGuardadas === 1 ? "foto" : "fotos"}`);
+    } else if (typeof piso.html === "string" && !/<img|<meta/i.test(piso.html)) {
+      detalles.push("sin fotos: llegó solo el texto");
+    }
+
     const resumen = detalles.length
       ? detalles.join(" · ")
       : `Sin datos${motivoLectura ? `: ${motivoLectura}` : ""} Entra y complétalo.`;

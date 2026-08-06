@@ -504,6 +504,23 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
     limpiar(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "") ??
     null;
 
+  // Si la página nos llega ya convertida a texto —los Atajos del iPhone lo
+  // hacen— no queda ni una etiqueta. Pero el título es lo primero que se
+  // lee, así que de ahí lo sacamos.
+  if (!titulo || titulo.length < 4) {
+    const arranque = texto.slice(0, 220).split(/\s[|·–—]\s/)[0].trim();
+    if (
+      arranque.length > 10 &&
+      /\b(piso|[áa]tico|casa|estudio|apartamento|d[úu]plex|loft|chalet|alquiler|habitaci)/i.test(arranque)
+    ) {
+      titulo = arranque;
+    }
+  }
+
+  // Guardamos el título tal cual venía: el barrio se saca de él, y ahí
+  // todavía están las comas y la ciudad que luego quitamos.
+  const tituloCrudo = titulo;
+
   if (titulo) {
     titulo = titulo
       .replace(/\s*[|·–—-]\s*(fotocasa|idealista|habitaclia|pisos\.com|milanuncios|enalquiler|yaencontre|spotahome|rentumo)\b.*$/i, "")
@@ -537,20 +554,31 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
   // Los portales suelen titular «… en Carrer de Verdi, Vila de Gràcia, Barcelona».
   // El barrio es lo que va justo antes de la ciudad, y nos hace falta para
   // cruzarlo con vuestras valoraciones.
-  if (!barrio && titulo) {
-    const trozos = titulo.split(",").map((t) => t.trim()).filter(Boolean);
+  const quitarTipo = (t: string) =>
+    t
+      .replace(
+        /^(?:piso|[áa]tico|casa|estudio|apartamento|d[úu]plex|loft|chalet|habitaci[óo]n|local)?\s*(?:de\s+)?(?:alquiler|venta)?\s*(?:en|a)\s+/i,
+        ""
+      )
+      .trim();
+
+  const barrioValido = (c: string) =>
+    c.length > 2 && !/^\d+$/.test(c) && !/^n\/a$/i.test(c) && !/^barcelona/i.test(c);
+
+  if (!barrio && tituloCrudo) {
+    // «Piso de alquiler en N/a, La Prosperitat, Barcelona Capital»
+    const trozos = tituloCrudo.split(",").map((t) => t.trim()).filter(Boolean);
     if (trozos.length >= 2 && /barcelona/i.test(trozos[trozos.length - 1])) {
-      const candidato = trozos[trozos.length - 2]
-        // «Piso de alquiler en El Putget» → «El Putget»
-        .replace(
-          /^(?:piso|[áa]tico|casa|estudio|apartamento|d[úu]plex|loft|chalet|habitaci[óo]n|local)?\s*(?:de\s+)?(?:alquiler|venta)?\s*(?:en|a)\s+/i,
-          ""
-        )
-        .trim();
-      if (candidato.length > 2 && !/^\d+$/.test(candidato) && !/^n\/a$/i.test(candidato)) {
-        barrio = candidato;
-      }
+      const candidato = quitarTipo(trozos[trozos.length - 2]);
+      if (barrioValido(candidato)) barrio = candidato;
     }
+  }
+
+  // Y si el título ya viene limpio y sin comas —«Piso de alquiler en La
+  // Prosperitat»—, el barrio es lo que va detrás del «en».
+  if (!barrio && titulo) {
+    const candidato = quitarTipo(titulo);
+    if (candidato !== titulo && barrioValido(candidato)) barrio = candidato;
   }
 
   // ── Fotos ─────────────────────────────────────────────────
