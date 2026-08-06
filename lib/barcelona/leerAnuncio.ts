@@ -505,16 +505,14 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
     null;
 
   // Si la página nos llega ya convertida a texto —los Atajos del iPhone lo
-  // hacen— no queda ni una etiqueta. Pero el título es lo primero que se
-  // lee, así que de ahí lo sacamos.
+  // hacen— no queda ni una etiqueta. El título sigue ahí dentro, pero no al
+  // principio: delante va el menú («Buscar Publica +13 fotos…»). Hay que
+  // buscar la frase, no los primeros caracteres.
   if (!titulo || titulo.length < 4) {
-    const arranque = texto.slice(0, 220).split(/\s[|·–—]\s/)[0].trim();
-    if (
-      arranque.length > 10 &&
-      /\b(piso|[áa]tico|casa|estudio|apartamento|d[úu]plex|loft|chalet|alquiler|habitaci)/i.test(arranque)
-    ) {
-      titulo = arranque;
-    }
+    const frase = texto.match(
+      /((?:piso|[áa]tico|casa|estudio|apartamento|d[úu]plex|loft|chalet|habitaci[óo]n)\s+(?:de\s+)?(?:alquiler|venta)?\s*en\s+.{4,80}?barcelona(?:\s+capital)?)/i
+    );
+    if (frase) titulo = frase[1].trim();
   }
 
   // Guardamos el título tal cual venía: el barrio se saca de él, y ahí
@@ -527,13 +525,22 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
       .replace(/\bn\/a\b[,\s]*/gi, "")
       .replace(/\s*,\s*(?=,)/g, "")
       .replace(/^[\s,·-]+|[\s,·-]+$/g, "")
-      .replace(/,\s*barcelona\s*(capital)?\s*$/i, "")
+      .replace(/[,\s]+barcelona\s*(capital)?\s*$/i, "")
       .trim();
     if (titulo.length < 4) titulo = null;
   }
 
-  const descripcion =
+  let descripcion =
     textoDe(campo(fichas, "description")) ?? meta(html, "og:description") ?? meta(html, "description");
+
+  // En texto plano, lo que el anunciante escribió va justo detrás del título
+  if (!descripcion && tituloCrudo) {
+    const donde = texto.indexOf(tituloCrudo);
+    if (donde >= 0) {
+      const cola = texto.slice(donde + tituloCrudo.length).trim();
+      if (cola.length > 40) descripcion = cola.slice(0, 900);
+    }
+  }
 
   // ── Dónde está ────────────────────────────────────────────
   const direccionFicha = campo(fichas, "address");
@@ -566,11 +573,20 @@ export async function leerAnuncio(enlace: string, htmlDado?: string): Promise<Re
     c.length > 2 && !/^\d+$/.test(c) && !/^n\/a$/i.test(c) && !/^barcelona/i.test(c);
 
   if (!barrio && tituloCrudo) {
-    // «Piso de alquiler en N/a, La Prosperitat, Barcelona Capital»
     const trozos = tituloCrudo.split(",").map((t) => t.trim()).filter(Boolean);
-    if (trozos.length >= 2 && /barcelona/i.test(trozos[trozos.length - 1])) {
-      const candidato = quitarTipo(trozos[trozos.length - 2]);
-      if (barrioValido(candidato)) barrio = candidato;
+    const ultimo = trozos[trozos.length - 1] ?? "";
+
+    if (/barcelona/i.test(ultimo)) {
+      // «…Comtes de Bell-lloc, Sants Barcelona Capital» → el barrio va
+      // pegado a la ciudad, sin coma. Le quitamos la ciudad y ahí está.
+      const pegado = quitarTipo(ultimo.replace(/\s*barcelona(\s+capital)?\s*$/i, "").trim());
+      if (barrioValido(pegado)) {
+        barrio = pegado;
+      } else if (trozos.length >= 2) {
+        // «…N/a, La Prosperitat, Barcelona Capital» → va en su propio trozo
+        const suelto = quitarTipo(trozos[trozos.length - 2]);
+        if (barrioValido(suelto)) barrio = suelto;
+      }
     }
   }
 
