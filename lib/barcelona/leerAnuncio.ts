@@ -136,7 +136,9 @@ function pareceUnAnuncio(html: string): boolean {
   return html.length > 5_000 && /og:image|og:title|<img|application\/ld\+json/i.test(html);
 }
 
-async function unIntento(url: string, agente: string): Promise<{ html: string } | { fallo: string }> {
+type Intento = { html: string } | { fallo: string; definitivo?: boolean };
+
+async function unIntento(url: string, agente: string): Promise<Intento> {
   const corte = new AbortController();
   const reloj = setTimeout(() => corte.abort(), 11_000);
   try {
@@ -145,12 +147,18 @@ async function unIntento(url: string, agente: string): Promise<{ html: string } 
       redirect: "follow",
       signal: corte.signal,
     });
-    if (res.status === 403 || res.status === 429 || res.status >= 500) {
-      return { fallo: "El portal no nos deja leer el anuncio desde aquí." };
+    if (res.status === 404 || res.status === 410) {
+      return { fallo: "Ese anuncio ya no existe.", definitivo: true };
     }
-    if (!res.ok) return { fallo: `El anuncio no responde (error ${res.status}).` };
+    if (!res.ok) {
+      // 403, 405, 429, 503… todos significan lo mismo: no eres bienvenido.
+      // Merece la pena volver a llamar presentándonos de otra manera.
+      return { fallo: `El portal no nos deja leer el anuncio (error ${res.status}).` };
+    }
     const tipo = res.headers.get("content-type") ?? "";
-    if (!tipo.includes("html")) return { fallo: "Ese enlace no lleva a un anuncio." };
+    if (!tipo.includes("html")) {
+      return { fallo: "Ese enlace no lleva a un anuncio.", definitivo: true };
+    }
     return { html: await res.text() };
   } catch (e) {
     const abortado = e instanceof Error && e.name === "AbortError";
@@ -171,8 +179,9 @@ async function descargar(url: string): Promise<{ html: string } | { fallo: strin
       continue;
     }
     ultimoFallo = intento.fallo;
-    // Si el enlace no es válido no hay nada que reintentar
-    if (intento.fallo.includes("no lleva a un anuncio")) break;
+    // Un anuncio borrado o un enlace que no es un anuncio no mejoran
+    // por insistir; un bloqueo, a veces sí.
+    if (intento.definitivo) break;
   }
 
   return { fallo: ultimoFallo };
