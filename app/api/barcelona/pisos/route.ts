@@ -45,6 +45,12 @@ interface PisoEntrante {
   barrio?: string;          // nombre; se resuelve contra bcn_barrios
   /** La página ya descargada por quien comparte el piso, si la manda. */
   html?: string;
+  /**
+   * Lo mismo, pero en base64. Los Atajos del iPhone convierten el HTML a
+   * texto por el camino y se llevan por delante las etiquetas —y con ellas
+   * las fotos—; codificado, iOS no lo toca.
+   */
+  html_b64?: string;
   lat?: number;
   lng?: number;
   fotos?: string[];
@@ -78,10 +84,17 @@ export async function POST(req: NextRequest) {
     // Puede llegar con texto alrededor, tal cual sale de compartir.
     if (!piso?.titulo?.trim() && piso?.url) {
       const suelto = piso.url.match(/https?:\/\/[^\s"'<>]+/);
-      const { anuncio, ...resto } = await leerAnuncio(
-        suelto ? suelto[0] : piso.url,
-        typeof piso.html === "string" ? piso.html : undefined
-      );
+
+      let pagina = typeof piso.html === "string" ? piso.html : undefined;
+      if (!pagina && typeof piso.html_b64 === "string" && piso.html_b64.length > 100) {
+        try {
+          pagina = Buffer.from(piso.html_b64, "base64").toString("utf8");
+        } catch {
+          /* venía mal codificado: seguimos como si no lo hubieran mandado */
+        }
+      }
+
+      const { anuncio, ...resto } = await leerAnuncio(suelto ? suelto[0] : piso.url, pagina);
       if (!resto.ok) motivoLectura = resto.motivo;
       piso = {
         ...piso,
