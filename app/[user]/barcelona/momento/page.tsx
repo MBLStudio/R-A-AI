@@ -44,6 +44,56 @@ export default function MomentoPage() {
   const [guardando, setGuardando] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Dónde estamos: coordenadas para el mapa y barrio para no tener que saberlo
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [ubicando, setUbicando] = useState(false);
+  const [avisoUbicacion, setAvisoUbicacion] = useState<string | null>(null);
+
+  const ubicar = () => {
+    if (ubicando) return;
+    if (!navigator.geolocation) {
+      setAvisoUbicacion("Este móvil no sabe decirnos dónde está.");
+      return;
+    }
+    setUbicando(true);
+    setAvisoUbicacion(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async ({ coords: c }) => {
+        setCoords({ lat: c.latitude, lng: c.longitude });
+        try {
+          const res = await fetch(`/api/barcelona/donde?lat=${c.latitude}&lng=${c.longitude}`);
+          const d = await res.json();
+
+          if (d.barrio_id) {
+            setBarrioId(d.barrio_id);
+            setAvisoUbicacion(`Estáis en ${d.barrio}${d.calle ? `, ${d.calle}` : ""}`);
+          } else if (d.sugerido) {
+            // Un barrio que no tenéis en la lista: al menos lo dejamos escrito
+            setAvisoUbicacion(`Estáis en ${d.sugerido}, que no está entre vuestros barrios.`);
+            if (!lugar.trim() && d.calle) setLugar(d.calle);
+          } else {
+            setAvisoUbicacion("Ubicación guardada, pero no sabemos el barrio.");
+          }
+          if (!lugar.trim() && d.calle && d.barrio_id) setLugar(d.calle);
+        } catch {
+          setAvisoUbicacion("Ubicación guardada, pero no hemos podido mirar el barrio.");
+        } finally {
+          setUbicando(false);
+        }
+      },
+      (error) => {
+        setUbicando(false);
+        setAvisoUbicacion(
+          error.code === error.PERMISSION_DENIED
+            ? "Nos falta permiso para saber dónde estáis."
+            : "No hemos podido localizaros. Probad al aire libre."
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 }
+    );
+  };
+
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
 
   useEffect(() => {
@@ -84,6 +134,9 @@ export default function MomentoPage() {
       lugar: lugar.trim() || null,
       barrio_id: barrioId || null,
       contacto_id: contactoId || null,
+      // Con las coordenadas, el momento aparece también en el mapa
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
       autor: user,
       es_hito: esHito,
       espontaneo: vivido,
@@ -226,6 +279,33 @@ export default function MomentoPage() {
             <option value="">Sin barrio concreto</option>
             {barrios.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
           </select>
+
+          <button
+            type="button"
+            onClick={ubicar}
+            disabled={ubicando}
+            style={{
+              width: "100%", marginTop: 8, padding: "11px 14px", borderRadius: 12,
+              cursor: ubicando ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              border: `1.5px solid ${coords ? BCN.oliva : BCN.arenaOsc}`,
+              background: coords ? `${BCN.oliva}12` : "white",
+              color: coords ? BCN.oliva : BCN.mar,
+              fontSize: 14, fontWeight: 600,
+            }}
+          >
+            <span style={{ fontSize: 15 }}>{ubicando ? "🛰️" : coords ? "✓" : "📍"}</span>
+            {ubicando ? "Mirando dónde estáis…" : coords ? "Ubicación guardada" : "Estamos aquí"}
+          </button>
+
+          {avisoUbicacion && (
+            <p style={{
+              fontSize: 12.5, lineHeight: 1.5, margin: "7px 0 0",
+              color: coords ? BCN.oliva : BCN.humo,
+            }}>
+              {avisoUbicacion}
+            </p>
+          )}
         </Campo>
       )}
 
