@@ -5,12 +5,12 @@ import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import {
-  BCN, EJES, ESTADO_PISO,
-  type Piso, type Barrio, type Etapa, type Valoracion, type EstadoPiso, type EjeKey,
+  BCN, EJES, ESTADO_PISO, colorDeContacto, inicialDe,
+  type Piso, type Barrio, type Etapa, type Valoracion, type EstadoPiso, type EjeKey, type Contacto,
 } from "@/lib/barcelona/types";
 import { calcularCompatibilidad, fraseCompat, colorCompat, LECTURA } from "@/lib/barcelona/compat";
 import {
-  getEtapaActiva, getPisos, getBarrios, getValoraciones,
+  getEtapaActiva, getPisos, getBarrios, getValoraciones, getContactos,
   addPiso, updatePiso, deletePiso, upsertValoracion,
 } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, Selector, IconoMas } from "@/components/barcelona/Shell";
@@ -26,6 +26,7 @@ export default function ViviendaPage() {
   const [pisos, setPisos] = useState<Piso[]>([]);
   const [barrios, setBarrios] = useState<Barrio[]>([]);
   const [valoraciones, setValoraciones] = useState<Valoracion[]>([]);
+  const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [filtro, setFiltro] = useState<EstadoPiso | "todos">("todos");
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -50,8 +51,10 @@ export default function ViviendaPage() {
     const e = await getEtapaActiva();
     if (!e) { setCargando(false); return; }
     setEtapa(e);
-    const [p, b, v] = await Promise.all([getPisos(e.id), getBarrios(e.id), getValoraciones(e.id, "piso")]);
-    setPisos(p); setBarrios(b); setValoraciones(v);
+    const [p, b, v, c] = await Promise.all([
+      getPisos(e.id), getBarrios(e.id), getValoraciones(e.id, "piso"), getContactos(e.id),
+    ]);
+    setPisos(p); setBarrios(b); setValoraciones(v); setContactos(c);
     setCargando(false);
   }, []);
 
@@ -101,6 +104,7 @@ export default function ViviendaPage() {
               key={p.id}
               piso={p}
               barrio={barrios.find((b) => b.id === p.barrio_id) ?? null}
+              contacto={contactos.find((c) => c.id === p.contacto_id) ?? null}
               compat={calcularCompatibilidad(valoraciones.filter((v) => v.entidad_id === p.id))}
               delay={i * 0.04}
               expandido={expandido === p.id}
@@ -132,6 +136,7 @@ export default function ViviendaPage() {
         abierta={anadiendo}
         etapaId={etapa?.id ?? null}
         barrios={barrios}
+        contactos={contactos}
         enlaceEntrante={enlaceEntrante}
         onCerrar={() => { setAnadiendo(false); setEnlaceEntrante(null); }}
         onGuardado={async () => { setAnadiendo(false); setEnlaceEntrante(null); await cargar(); }}
@@ -151,8 +156,8 @@ export default function ViviendaPage() {
 
 /* ─── Tarjeta ──────────────────────────────────────────────── */
 
-function TarjetaPiso({ piso, barrio, compat, delay, expandido, onToggle, onEstado, onValorar, onBorrar, onPortada, onQuitarFoto }: {
-  piso: Piso; barrio: Barrio | null; compat: ReturnType<typeof calcularCompatibilidad>;
+function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggle, onEstado, onValorar, onBorrar, onPortada, onQuitarFoto }: {
+  piso: Piso; barrio: Barrio | null; contacto: Contacto | null; compat: ReturnType<typeof calcularCompatibilidad>;
   delay: number; expandido: boolean;
   onToggle: () => void; onEstado: (e: EstadoPiso) => void; onValorar: () => void; onBorrar: () => void;
   onPortada: (indice: number) => void; onQuitarFoto: (indice: number) => void;
@@ -283,6 +288,23 @@ function TarjetaPiso({ piso, barrio, compat, delay, expandido, onToggle, onEstad
                 <p style={{ fontSize: 12.5, color: BCN.humo, margin: "8px 0 0" }}>📍 {piso.direccion}</p>
               )}
 
+              {contacto && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                  <span style={{
+                    width: 24, height: 24, flexShrink: 0,
+                    borderRadius: contacto.tipo === "empresa" ? 7 : "50%",
+                    background: colorDeContacto(contacto.nombre), color: "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, fontWeight: 600, fontFamily: "Georgia, serif",
+                  }}>
+                    {inicialDe(contacto.nombre)}
+                  </span>
+                  <span style={{ fontSize: 12.5, color: BCN.humo }}>
+                    Os lo enseñó <strong style={{ color: BCN.tinta, fontWeight: 600 }}>{contacto.nombre}</strong>
+                  </span>
+                </div>
+              )}
+
               {compat.porcentaje !== null && (
                 <div style={{ marginTop: 13, padding: "11px 13px", borderRadius: 11, background: BCN.arena, borderLeft: `3px solid ${LECTURA[compat.estado].color}` }}>
                   <p style={{ fontSize: 13, color: BCN.tinta, margin: 0, lineHeight: 1.5 }}>
@@ -368,8 +390,8 @@ function Ecosistema() {
 
 /* ─── Hojas ────────────────────────────────────────────────── */
 
-function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGuardado }: {
-  abierta: boolean; etapaId: string | null; barrios: Barrio[];
+function HojaAnadir({ abierta, etapaId, barrios, contactos, enlaceEntrante, onCerrar, onGuardado }: {
+  abierta: boolean; etapaId: string | null; barrios: Barrio[]; contactos: Contacto[];
   enlaceEntrante?: string | null;
   onCerrar: () => void; onGuardado: () => void;
 }) {
@@ -385,6 +407,7 @@ function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGua
   const [exterior, setExterior] = useState<boolean | null>(null);
   const [direccion, setDireccion] = useState("");
   const [barrioId, setBarrioId] = useState("");
+  const [contactoId, setContactoId] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [guardando, setGuardando] = useState(false);
 
@@ -457,7 +480,7 @@ function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGua
   const limpiar = () => {
     setTitulo(""); setUrl(""); setPrecio(""); setM2(""); setHab("");
     setBanos(""); setPlanta(""); setAscensor(null); setAmueblado(null); setExterior(null);
-    setDireccion(""); setBarrioId(""); setDescripcion("");
+    setDireccion(""); setBarrioId(""); setContactoId(""); setDescripcion("");
     setExtra({}); setAviso(null); setLeido(false);
   };
 
@@ -486,6 +509,7 @@ function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGua
       habitaciones: hab ? Number(hab) : null,
       direccion: direccion.trim() || null,
       barrio_id: barrioId || null,
+      contacto_id: contactoId || null,
       descripcion: descripcion.trim() || null,
       estado: "nuevo",
       portal_id: extra.portal_id ?? null,
@@ -531,6 +555,12 @@ function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGua
         </div>
       </Campo>
 
+      {!leido && !aviso && !url.trim() && (
+        <p style={{ fontSize: 12.5, color: BCN.humo, margin: "-6px 0 14px", lineHeight: 1.5 }}>
+          ¿Sin anuncio? Es un piso que os enseña una inmobiliaria: saltaos
+          esto y rellenadlo abajo a mano.
+        </p>
+      )}
       {leido && !aviso && (
         <p style={{ fontSize: 12.5, color: BCN.oliva, margin: "-6px 0 14px", lineHeight: 1.5 }}>
           Anuncio leído. Repasad que esté todo bien antes de guardar.
@@ -582,6 +612,47 @@ function HojaAnadir({ abierta, etapaId, barrios, enlaceEntrante, onCerrar, onGua
             <option value="">Sin asignar</option>
             {barrios.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
           </select>
+        </Campo>
+      )}
+
+      {contactos.length > 0 && (
+        <Campo label="¿Quién os lo enseña?">
+          <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4 }}>
+            {contactos.map((c) => {
+              const activo = contactoId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setContactoId(activo ? "" : c.id)}
+                  style={{
+                    flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+                    gap: 5, padding: "8px 6px 6px", borderRadius: 12, cursor: "pointer", width: 68,
+                    border: `1.5px solid ${activo ? BCN.tejaOsc : "transparent"}`,
+                    background: activo ? BCN.arena : "transparent",
+                  }}
+                >
+                  <span style={{
+                    width: 34, height: 34,
+                    borderRadius: c.tipo === "empresa" ? 10 : "50%",
+                    background: colorDeContacto(c.nombre), color: "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 14, fontWeight: 600, fontFamily: "Georgia, serif",
+                    opacity: activo ? 1 : 0.55,
+                  }}>
+                    {inicialDe(c.nombre)}
+                  </span>
+                  <span style={{
+                    fontSize: 10.5, color: activo ? BCN.tinta : BCN.humo, textAlign: "center",
+                    lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    width: "100%", fontWeight: activo ? 600 : 500,
+                  }}>
+                    {c.nombre.split(" ")[0]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </Campo>
       )}
       <Campo label="Notas">

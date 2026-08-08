@@ -5,12 +5,12 @@ import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import {
-  BCN, TIPO_CONTACTO, colorDeContacto, inicialDe, pintarMomento,
-  type Contacto, type TipoContacto, type Etapa, type Momento,
+  BCN, TIPO_CONTACTO, ESTADO_PISO, colorDeContacto, inicialDe, pintarMomento,
+  type Contacto, type TipoContacto, type Etapa, type Momento, type Piso,
 } from "@/lib/barcelona/types";
 import {
   getEtapaActiva, getContactos, addContacto, updateContacto, deleteContacto,
-  getMomentosPorContacto,
+  getMomentosPorContacto, getPisosPorContacto,
 } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
 
@@ -35,6 +35,7 @@ export default function ContactosPage() {
   const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [momentos, setMomentos] = useState<Record<string, Momento[]>>({});
+  const [pisos, setPisos] = useState<Record<string, Piso[]>>({});
   const [cargando, setCargando] = useState(true);
   const [editando, setEditando] = useState<Contacto | "nuevo" | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -47,12 +48,14 @@ export default function ContactosPage() {
     const e = await getEtapaActiva();
     if (!e) { setCargando(false); return; }
     setEtapa(e);
-    const [lista, porContacto] = await Promise.all([
+    const [lista, susMomentos, susPisos] = await Promise.all([
       getContactos(e.id),
       getMomentosPorContacto(e.id),
+      getPisosPorContacto(e.id),
     ]);
     setContactos(lista);
-    setMomentos(porContacto);
+    setMomentos(susMomentos);
+    setPisos(susPisos);
     setCargando(false);
   }, []);
 
@@ -155,6 +158,7 @@ export default function ContactosPage() {
                       key={c.id}
                       contacto={c}
                       momentos={momentos[c.id] ?? []}
+                      pisos={pisos[c.id] ?? []}
                       abierto={abierto === c.id}
                       onToggle={() => setAbierto(abierto === c.id ? null : c.id)}
                       onEditar={() => setEditando(c)}
@@ -181,8 +185,8 @@ export default function ContactosPage() {
 
 /* ─── Una línea de la agenda ───────────────────────────────── */
 
-function Fila({ contacto, momentos, abierto, onToggle, onEditar }: {
-  contacto: Contacto; momentos: Momento[];
+function Fila({ contacto, momentos, pisos, abierto, onToggle, onEditar }: {
+  contacto: Contacto; momentos: Momento[]; pisos: Piso[];
   abierto: boolean; onToggle: () => void; onEditar: () => void;
 }) {
   const color = colorDeContacto(contacto.nombre);
@@ -217,10 +221,11 @@ function Fila({ contacto, momentos, abierto, onToggle, onEditar }: {
           }}>
             {contacto.nombre}
           </span>
-          {(contacto.empresa || momentos.length > 0) && (
+          {(contacto.empresa || momentos.length > 0 || pisos.length > 0) && (
             <span style={{ display: "block", fontSize: 12.5, color: BCN.humo, marginTop: 1 }}>
               {[
                 contacto.empresa,
+                pisos.length > 0 ? `${pisos.length} ${pisos.length === 1 ? "piso" : "pisos"}` : null,
                 momentos.length > 0 ? `${momentos.length} ${momentos.length === 1 ? "cita" : "citas"}` : null,
               ].filter(Boolean).join(" · ")}
             </span>
@@ -299,7 +304,47 @@ function Fila({ contacto, momentos, abierto, onToggle, onEditar }: {
                 </>
               )}
 
-              {!contacto.telefono && !contacto.email && !contacto.notas && momentos.length === 0 && (
+              {pisos.length > 0 && (
+                <>
+                  <p style={{
+                    fontSize: 10.5, fontWeight: 800, color: BCN.humo, textTransform: "uppercase",
+                    letterSpacing: "0.1em", margin: "16px 0 8px",
+                  }}>
+                    Pisos que os ha enseñado
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {pisos.map((p) => {
+                      const est = ESTADO_PISO[p.estado];
+                      return (
+                        <div key={p.id} style={{
+                          display: "flex", alignItems: "center", gap: 9,
+                          background: "white", borderRadius: 10, padding: "9px 11px",
+                          borderLeft: `3px solid ${est.color}`,
+                        }}>
+                          <span style={{ fontSize: 14 }}>{est.icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{
+                              fontSize: 13.5, color: BCN.tinta, margin: 0, fontWeight: 500,
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }}>
+                              {p.titulo}
+                            </p>
+                            <p style={{ fontSize: 11.5, color: BCN.humo, margin: "2px 0 0" }}>
+                              {[
+                                p.precio ? `${p.precio.toLocaleString("es-ES")} €` : null,
+                                p.m2 ? `${p.m2} m²` : null,
+                                est.label,
+                              ].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {!contacto.telefono && !contacto.email && !contacto.notas && momentos.length === 0 && pisos.length === 0 && (
                 <p style={{ fontSize: 13, color: BCN.humo, margin: "8px 0 0", fontStyle: "italic" }}>
                   Sin datos todavía.
                 </p>

@@ -239,6 +239,23 @@ export async function getMomentosPorContacto(etapaId: string): Promise<Record<st
   return agrupados;
 }
 
+/** Los pisos que os ha enseñado cada uno. */
+export async function getPisosPorContacto(etapaId: string): Promise<Record<string, Piso[]>> {
+  const { data } = await supabase
+    .from("bcn_pisos")
+    .select("*")
+    .eq("etapa_id", etapaId)
+    .not("contacto_id", "is", null)
+    .order("created_at", { ascending: false });
+
+  const agrupados: Record<string, Piso[]> = {};
+  for (const piso of (data ?? []) as Piso[]) {
+    if (!piso.contacto_id) continue;
+    (agrupados[piso.contacto_id] ??= []).push(piso);
+  }
+  return agrupados;
+}
+
 // ─── Caché de IA ─────────────────────────────────────────────
 // Evita regenerar texto en cada carga: solo si cambian los datos.
 

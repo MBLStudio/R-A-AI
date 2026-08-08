@@ -112,6 +112,8 @@ export interface Piso {
   lng: number | null;
   fotos: string[];
   descripcion: string | null;
+  /** Quién os lo enseñó: la inmobiliaria, el casero, un amigo. */
+  contacto_id: string | null;
   estado: EstadoPiso;
   motivo_descarte: string | null;
   datos_extra: Record<string, unknown>;
