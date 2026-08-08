@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  BCN, TIPO_MOMENTO, TIPOS_EXPERIENCIA,
-  type Momento, type TipoMomento, type Barrio, type Autor,
+  BCN, TIPO_MOMENTO, pintarMomento, TIPOS_EXPERIENCIA,
+  type Momento, type TipoMomento, type Barrio, type Autor, type Contacto,
 } from "@/lib/barcelona/types";
 import { updateMomento, deleteMomento, formatFechaLarga, nombreDia } from "@/lib/barcelona/queries";
 import { Hoja, Campo, estiloInput, Selector } from "@/components/barcelona/Shell";
@@ -22,9 +22,10 @@ const TIPOS: TipoMomento[] = [
   "excursion", "cita", "llegada", "mudanza", "otro",
 ];
 
-export function HojaEvento({ momento, barrios, onCerrar, onCambio }: {
+export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambio }: {
   momento: Momento | null;
   barrios: Barrio[];
+  contactos?: Contacto[];
   onCerrar: () => void;
   onCambio: () => void;
 }) {
@@ -39,6 +40,7 @@ export function HojaEvento({ momento, barrios, onCerrar, onCambio }: {
   const [nota, setNota] = useState("");
   const [lugar, setLugar] = useState("");
   const [barrioId, setBarrioId] = useState("");
+  const [contactoId, setContactoId] = useState("");
   const [autor, setAutor] = useState<Autor>("ambos");
   const [esHito, setEsHito] = useState(false);
 
@@ -54,13 +56,14 @@ export function HojaEvento({ momento, barrios, onCerrar, onCambio }: {
     setNota(momento.nota ?? "");
     setLugar(momento.lugar ?? "");
     setBarrioId(momento.barrio_id ?? "");
+    setContactoId(momento.contacto_id ?? "");
     setAutor(momento.autor);
     setEsHito(momento.es_hito);
   }, [momento]);
 
   if (!momento) return <Hoja abierta={false} onCerrar={onCerrar} titulo="">{null}</Hoja>;
 
-  const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
+  const cfg = pintarMomento(momento.tipo, momento.titulo);
   const vivido = momento.estado === "vivido";
 
   const guardar = async () => {
@@ -74,6 +77,7 @@ export function HojaEvento({ momento, barrios, onCerrar, onCambio }: {
       nota: nota.trim() || null,
       lugar: lugar.trim() || null,
       barrio_id: barrioId || null,
+      contacto_id: contactoId || null,
       autor,
       es_hito: esHito,
     });
@@ -103,9 +107,38 @@ export function HojaEvento({ momento, barrios, onCerrar, onCambio }: {
         /* ══ Modo edición ══ */
         <>
           <Campo label="¿Qué es?">
-            <Selector valor={tipo} onChange={setTipo} color={cfg.color}
-              opciones={TIPOS.map((t) => ({ valor: t, label: TIPO_MOMENTO[t].label, icon: TIPO_MOMENTO[t].icon }))} />
+            <input value={tipo} onChange={(e) => setTipo(e.target.value)}
+              placeholder="Lo que sea: firma, mudanza, cena…" style={estiloInput} />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+              {TIPOS.map((t) => {
+                const c = TIPO_MOMENTO[t];
+                const activo = tipo === t;
+                return (
+                  <button key={t} type="button" onClick={() => setTipo(activo ? "" : t)}
+                    style={{
+                      padding: "6px 11px", borderRadius: 16, cursor: "pointer", fontSize: 12.5,
+                      border: `1px solid ${activo ? c.color : BCN.arenaOsc}`,
+                      background: activo ? `${c.color}18` : "white",
+                      color: activo ? c.color : BCN.humo,
+                      fontWeight: activo ? 600 : 500,
+                    }}>
+                    {c.icon} {c.label}
+                  </button>
+                );
+              })}
+            </div>
           </Campo>
+
+          {contactos.length > 0 && (
+            <Campo label="¿Con quién?">
+              <select value={contactoId} onChange={(e) => setContactoId(e.target.value)} style={estiloInput}>
+                <option value="">Nadie en concreto</option>
+                {contactos.map((c) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </Campo>
+          )}
 
           <Campo label="Título">
             <input value={titulo} onChange={(e) => setTitulo(e.target.value)} style={estiloInput} />

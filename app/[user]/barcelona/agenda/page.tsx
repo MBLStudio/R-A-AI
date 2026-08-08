@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO, type Momento, type Etapa, type Barrio } from "@/lib/barcelona/types";
+import { BCN, TIPO_MOMENTO, pintarMomento, type Momento, type Etapa, type Barrio, type Contacto } from "@/lib/barcelona/types";
 import {
-  getEtapaActiva, getMomentos, getBarrios, hoyISO, formatFechaLarga, nombreDia,
+  getEtapaActiva, getMomentos, getBarrios, getContactos, hoyISO, formatFechaLarga, nombreDia,
 } from "@/lib/barcelona/queries";
 import { Pantalla, IconoMas } from "@/components/barcelona/Shell";
 import { HojaEvento } from "@/components/barcelona/HojaEvento";
@@ -29,6 +29,7 @@ export default function CalendarioPage() {
   const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [momentos, setMomentos] = useState<Momento[]>([]);
   const [barrios, setBarrios] = useState<Barrio[]>([]);
+  const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [seleccionado, setSeleccionado] = useState(hoy);
   const [abierto, setAbierto] = useState<Momento | null>(null);
@@ -44,7 +45,8 @@ export default function CalendarioPage() {
     const e = await getEtapaActiva();
     if (!e) { setCargando(false); return; }
     setEtapa(e);
-    const [m, b] = await Promise.all([getMomentos(e.id), getBarrios(e.id)]);
+    const [m, b, c] = await Promise.all([getMomentos(e.id), getBarrios(e.id), getContactos(e.id)]);
+    setContactos(c);
     setMomentos(m);
     setBarrios(b);
     // Si hay una ficha abierta, refrescarla con los datos nuevos.
@@ -151,7 +153,7 @@ export default function CalendarioPage() {
                       {items.slice(0, 3).map((m) => (
                         <span key={m.id} style={{
                           width: 4, height: 4, borderRadius: "50%",
-                          background: activo ? "rgba(255,255,255,0.9)" : (TIPO_MOMENTO[m.tipo]?.color ?? BCN.humo),
+                          background: activo ? "rgba(255,255,255,0.9)" : pintarMomento(m.tipo, m.titulo).color,
                           opacity: m.estado === "vivido" ? 1 : 0.55,
                         }} />
                       ))}
@@ -210,6 +212,7 @@ export default function CalendarioPage() {
       <HojaEvento
         momento={abierto}
         barrios={barrios}
+        contactos={contactos}
         onCerrar={() => setAbierto(null)}
         onCambio={cargar}
       />
@@ -222,7 +225,7 @@ export default function CalendarioPage() {
 function Evento({ momento, delay, onAbrir }: {
   momento: Momento; delay: number; onAbrir: () => void;
 }) {
-  const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
+  const cfg = pintarMomento(momento.tipo, momento.titulo);
   const vivido = momento.estado === "vivido";
 
   return (

@@ -218,6 +218,27 @@ export async function deleteContacto(id: string): Promise<boolean> {
   return !error;
 }
 
+/**
+ * Todo lo que habéis hecho con esta gente, de una sola vez.
+ * Devuelve un mapa contacto → momentos, para no lanzar una consulta
+ * por cada ficha que se abre.
+ */
+export async function getMomentosPorContacto(etapaId: string): Promise<Record<string, Momento[]>> {
+  const { data } = await supabase
+    .from("bcn_momentos")
+    .select("*")
+    .eq("etapa_id", etapaId)
+    .not("contacto_id", "is", null)
+    .order("fecha", { ascending: false });
+
+  const agrupados: Record<string, Momento[]> = {};
+  for (const momento of (data ?? []) as Momento[]) {
+    if (!momento.contacto_id) continue;
+    (agrupados[momento.contacto_id] ??= []).push(momento);
+  }
+  return agrupados;
+}
+
 // ─── Caché de IA ─────────────────────────────────────────────
 // Evita regenerar texto en cada carga: solo si cambian los datos.
 

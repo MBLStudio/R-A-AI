@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO } from "@/lib/barcelona/types";
+import { BCN, TIPO_MOMENTO, pintarMomento } from "@/lib/barcelona/types";
 import type { Etapa, Barrio, Momento, Piso, Valoracion, Contacto } from "@/lib/barcelona/types";
 import { rankear } from "@/lib/barcelona/compat";
 import {
@@ -263,7 +263,7 @@ function Proximo({ momento, onClick }: { momento: Momento; onClick: () => void }
     momento.fecha === hoy ? "Hoy" :
     momento.fecha === manana ? "Mañana" :
     `${nombreDia(momento.fecha)} ${formatFechaCorta(momento.fecha)}`;
-  const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
+  const cfg = pintarMomento(momento.tipo, momento.titulo);
 
   return (
     <motion.button

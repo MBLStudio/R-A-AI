@@ -7,17 +7,25 @@ export type Autor = Usuario | "ambos";
 
 export type EstadoMomento = "previsto" | "vivido";
 
-export type TipoMomento =
-  | "llegada"
-  | "visita_piso"
-  | "cita"
-  | "restaurante"
-  | "rooftop"
-  | "playa"
-  | "excursion"
-  | "explorar"
-  | "mudanza"
-  | "otro";
+/**
+ * El tipo de momento es texto libre: nadie sabe de antemano todo lo que
+ * les va a pasar. Los de abajo son los que ya usan, y se ofrecen como
+ * atajo para no teclear — pero pueden escribir el que quieran.
+ */
+export type TipoMomento = string;
+
+export const TIPOS_SUGERIDOS = [
+  "llegada",
+  "visita_piso",
+  "cita",
+  "restaurante",
+  "rooftop",
+  "playa",
+  "excursion",
+  "explorar",
+  "mudanza",
+  "otro",
+] as const;
 
 export type EstadoPiso =
   | "nuevo"
@@ -27,13 +35,8 @@ export type EstadoPiso =
   | "descartado"
   | "elegido";
 
-export type TipoContacto =
-  | "inmobiliaria"
-  | "propietario"
-  | "empresa"
-  | "amigo"
-  | "conocido"
-  | "otro";
+/** Solo dos: o es alguien, o es un sitio donde trabaja alguien. */
+export type TipoContacto = "persona" | "empresa";
 
 export type EntidadValorable = "barrio" | "piso" | "experiencia";
 
@@ -78,6 +81,8 @@ export interface Momento {
   lng: number | null;
   barrio_id: string | null;
   piso_id: string | null;
+  /** Con quién fue: la de la inmobiliaria, el casero, un amigo… */
+  contacto_id: string | null;
   autor: Autor;
   es_hito: boolean;
   espontaneo: boolean;
@@ -169,7 +174,7 @@ export const EJES = [
 
 export type EjeKey = (typeof EJES)[number]["key"];
 
-export const TIPO_MOMENTO: Record<TipoMomento, { label: string; icon: string; color: string }> = {
+export const TIPO_MOMENTO: Record<string, { label: string; icon: string; color: string }> = {
   llegada:     { label: "Llegada",       icon: "✈️", color: BCN.sol },
   visita_piso: { label: "Visita piso",   icon: "🏠", color: BCN.teja },
   cita:        { label: "Cita",          icon: "📌", color: BCN.mar },
@@ -181,6 +186,35 @@ export const TIPO_MOMENTO: Record<TipoMomento, { label: string; icon: string; co
   mudanza:     { label: "Mudanza",       icon: "📦", color: BCN.teja },
   otro:        { label: "Momento",       icon: "✨", color: BCN.humo },
 };
+
+/** Palabras que delatan de qué va un momento escrito a mano. */
+const PISTAS: [RegExp, string][] = [
+  [/piso|vivienda|casa|visita/i, "visita_piso"],
+  [/come|cena|restaurant|tapa|brunch|desayun/i, "restaurante"],
+  [/playa|mar\b|baño/i, "playa"],
+  [/terraza|rooftop|azotea|atardecer/i, "rooftop"],
+  [/tren|excursi|viaje|montserrat|sitges/i, "excursion"],
+  [/mudanza|caja|mudar/i, "mudanza"],
+  [/cita|reuni|firma|notar[íi]a|banco|gestor/i, "cita"],
+  [/pasea|explora|barrio|ruta|descubr/i, "explorar"],
+  [/vuelo|avi[óo]n|llega|aterriza/i, "llegada"],
+];
+
+/**
+ * Cómo pintar un momento. Si el tipo es de los de siempre, su icono;
+ * si lo escribieron ellos, buscamos una pista en las palabras y, si no
+ * la hay, se queda con la estrella.
+ */
+export function pintarMomento(tipo: string, titulo = ""): { label: string; icon: string; color: string } {
+  const conocido = TIPO_MOMENTO[tipo];
+  if (conocido) return conocido;
+
+  const texto = `${tipo} ${titulo}`;
+  for (const [patron, clave] of PISTAS) {
+    if (patron.test(texto)) return { ...TIPO_MOMENTO[clave], label: tipo };
+  }
+  return { label: tipo || "Momento", icon: "✨", color: BCN.humo };
+}
 
 /** Tipos que además cuentan como "experiencia" (tienen lugar y recuerdo). */
 export const TIPOS_EXPERIENCIA: TipoMomento[] = [
@@ -196,11 +230,27 @@ export const ESTADO_PISO: Record<EstadoPiso, { label: string; icon: string; colo
   elegido:    { label: "¡Elegido!",  icon: "🔑", color: BCN.sol },
 };
 
-export const TIPO_CONTACTO: Record<TipoContacto, { label: string; icon: string }> = {
-  inmobiliaria: { label: "Inmobiliaria", icon: "🏢" },
-  propietario:  { label: "Propietario",  icon: "🔑" },
-  empresa:      { label: "Empresa",      icon: "💼" },
-  amigo:        { label: "Amigo",        icon: "🫂" },
-  conocido:     { label: "Conocido",     icon: "👋" },
-  otro:         { label: "Contacto",     icon: "📇" },
+export const TIPO_CONTACTO: Record<TipoContacto, { label: string; plural: string; icon: string }> = {
+  persona: { label: "Persona", plural: "Personas", icon: "👤" },
+  empresa: { label: "Empresa", plural: "Empresas", icon: "🏢" },
 };
+
+/**
+ * El color del círculo de un contacto, sacado de su propio nombre: así
+ * cada uno tiene siempre el mismo y la lista se reconoce de un vistazo.
+ */
+const COLORES_INICIAL = [BCN.teja, BCN.mar, BCN.oliva, BCN.sol, BCN.tejaOsc, BCN.marClaro];
+
+export function colorDeContacto(nombre: string): string {
+  let suma = 0;
+  for (let i = 0; i < nombre.length; i++) suma = (suma + nombre.charCodeAt(i)) % 997;
+  return COLORES_INICIAL[suma % COLORES_INICIAL.length];
+}
+
+/** La letra que va dentro del círculo. */
+export function inicialDe(nombre: string): string {
+  const limpio = nombre.trim();
+  if (!limpio) return "?";
+  const letra = limpio[0].toUpperCase();
+  return /[A-ZÁÉÍÓÚÑÀÈÌÒÙÇ0-9]/.test(letra) ? letra : "#";
+}

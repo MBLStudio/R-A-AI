@@ -4,13 +4,17 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO, type TipoMomento, type Barrio, type Etapa } from "@/lib/barcelona/types";
-import { getEtapaActiva, getBarrios, addMomento, hoyISO } from "@/lib/barcelona/queries";
+import {
+  BCN, TIPO_MOMENTO, colorDeContacto, inicialDe,
+  type TipoMomento, type Barrio, type Etapa, type Contacto,
+} from "@/lib/barcelona/types";
+import { getEtapaActiva, getBarrios, getContactos, addMomento, hoyISO } from "@/lib/barcelona/queries";
 import { uploadPhoto } from "@/lib/upload";
-import { Pantalla, Campo, estiloInput, Boton, Selector } from "@/components/barcelona/Shell";
+import { Pantalla, Campo, estiloInput, Boton } from "@/components/barcelona/Shell";
 
-const TIPOS: TipoMomento[] = [
-  "explorar", "restaurante", "visita_piso", "rooftop", "playa", "excursion", "cita", "otro",
+/** Atajos para no teclear. No es una lista cerrada: se puede escribir lo que sea. */
+const ATAJOS: TipoMomento[] = [
+  "explorar", "restaurante", "visita_piso", "rooftop", "playa", "excursion", "cita", "mudanza",
 ];
 
 export default function MomentoPage() {
@@ -22,9 +26,11 @@ export default function MomentoPage() {
 
   const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [barrios, setBarrios] = useState<Barrio[]>([]);
+  const [contactos, setContactos] = useState<Contacto[]>([]);
 
   const [vivido, setVivido] = useState(searchParams.get("plan") !== "1");
-  const [tipo, setTipo] = useState<TipoMomento>("explorar");
+  const [tipo, setTipo] = useState<TipoMomento>("");
+  const [contactoId, setContactoId] = useState("");
   const [titulo, setTitulo] = useState("");
   const [nota, setNota] = useState("");
   // El calendario manda el día que se ha pinchado.
@@ -44,7 +50,9 @@ export default function MomentoPage() {
     getEtapaActiva().then(async (e) => {
       if (!e) return;
       setEtapa(e);
-      setBarrios(await getBarrios(e.id));
+      const [b, c] = await Promise.all([getBarrios(e.id), getContactos(e.id)]);
+      setBarrios(b);
+      setContactos(c);
     });
   }, []);
 
@@ -69,12 +77,13 @@ export default function MomentoPage() {
       fecha,
       hora: hora || null,
       estado: vivido ? "vivido" : "previsto",
-      tipo,
+      tipo: tipo.trim() || "otro",
       titulo: titulo.trim(),
       nota: nota.trim() || null,
       fotos,
       lugar: lugar.trim() || null,
       barrio_id: barrioId || null,
+      contacto_id: contactoId || null,
       autor: user,
       es_hito: esHito,
       espontaneo: vivido,
@@ -110,13 +119,76 @@ export default function MomentoPage() {
       </div>
 
       <Campo label="¿Qué es?">
-        <Selector
-          valor={tipo}
-          onChange={setTipo}
-          color={vivido ? BCN.teja : BCN.mar}
-          opciones={TIPOS.map((t) => ({ valor: t, label: TIPO_MOMENTO[t].label, icon: TIPO_MOMENTO[t].icon }))}
+        <input
+          value={tipo}
+          onChange={(e) => setTipo(e.target.value)}
+          placeholder="Escribid lo que sea: firma, mudanza, cena…"
+          style={estiloInput}
         />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          {ATAJOS.map((t) => {
+            const cfg = TIPO_MOMENTO[t];
+            const activo = tipo === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTipo(activo ? "" : t)}
+                style={{
+                  padding: "6px 11px", borderRadius: 16, cursor: "pointer", fontSize: 12.5,
+                  border: `1px solid ${activo ? cfg.color : BCN.arenaOsc}`,
+                  background: activo ? `${cfg.color}18` : "white",
+                  color: activo ? cfg.color : BCN.humo,
+                  fontWeight: activo ? 600 : 500,
+                }}
+              >
+                {cfg.icon} {cfg.label}
+              </button>
+            );
+          })}
+        </div>
       </Campo>
+
+      {contactos.length > 0 && (
+        <Campo label="¿Con quién?">
+          <div style={{ display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4, margin: "0 -20px", paddingLeft: 20, paddingRight: 20 }}>
+            {contactos.map((c) => {
+              const activo = contactoId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setContactoId(activo ? "" : c.id)}
+                  style={{
+                    flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+                    gap: 5, padding: "8px 6px 6px", borderRadius: 12, cursor: "pointer", width: 66,
+                    border: `1.5px solid ${activo ? BCN.tinta : "transparent"}`,
+                    background: activo ? BCN.arena : "transparent",
+                  }}
+                >
+                  <span style={{
+                    width: 34, height: 34,
+                    borderRadius: c.tipo === "empresa" ? 10 : "50%",
+                    background: colorDeContacto(c.nombre), color: "white",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 14, fontWeight: 600, fontFamily: "Georgia, serif",
+                    opacity: activo ? 1 : 0.55,
+                  }}>
+                    {inicialDe(c.nombre)}
+                  </span>
+                  <span style={{
+                    fontSize: 10.5, color: activo ? BCN.tinta : BCN.humo, textAlign: "center",
+                    lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    width: "100%", fontWeight: activo ? 600 : 500,
+                  }}>
+                    {c.nombre.split(" ")[0]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Campo>
+      )}
 
       <Campo label="Título">
         <input value={titulo} onChange={(e) => setTitulo(e.target.value)}

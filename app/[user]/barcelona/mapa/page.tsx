@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO, type Barrio, type Momento, type Piso, type Valoracion } from "@/lib/barcelona/types";
+import { BCN, TIPO_MOMENTO, pintarMomento, type Barrio, type Momento, type Piso, type Valoracion } from "@/lib/barcelona/types";
 import { rankear, colorCompat } from "@/lib/barcelona/compat";
 import { getEtapaActiva, getBarrios, getHistoria, getPisos, getValoraciones, formatFechaLarga } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio } from "@/components/barcelona/Shell";
@@ -100,7 +100,7 @@ export default function MapaPage() {
       const capa: Capa = esLugar ? "lugares" : "recuerdos";
       const c = m.lat && m.lng ? { lat: m.lat, lng: m.lng } : anclar(m.barrio_id, i + 3);
       if (!c) return;
-      const cfg = TIPO_MOMENTO[m.tipo] ?? TIPO_MOMENTO.otro;
+      const cfg = pintarMomento(m.tipo, m.titulo);
       lista.push({
         id: `mom-${m.id}`, ...c, icon: cfg.icon, color: cfg.color, capa,
         titulo: m.titulo,

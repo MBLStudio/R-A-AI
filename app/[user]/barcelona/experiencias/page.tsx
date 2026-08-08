@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO, TIPOS_EXPERIENCIA, type Momento, type TipoMomento } from "@/lib/barcelona/types";
+import { BCN, TIPO_MOMENTO, pintarMomento, TIPOS_EXPERIENCIA, type Momento, type TipoMomento } from "@/lib/barcelona/types";
 import { getEtapaActiva, getHistoria, formatFechaLarga } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Selector, IconoMas } from "@/components/barcelona/Shell";
 
@@ -77,7 +77,7 @@ export default function ExperienciasPage() {
 }
 
 function Recuerdo({ momento, delay }: { momento: Momento; delay: number }) {
-  const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
+  const cfg = pintarMomento(momento.tipo, momento.titulo);
   const [ampliada, setAmpliada] = useState(false);
 
   return (

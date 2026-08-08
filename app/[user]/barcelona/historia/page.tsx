@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
-import { BCN, TIPO_MOMENTO, type Momento, type Etapa } from "@/lib/barcelona/types";
+import { BCN, TIPO_MOMENTO, pintarMomento, type Momento, type Etapa } from "@/lib/barcelona/types";
 import { getEtapaActiva, getHistoria, deleteMomento } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, IconoMas } from "@/components/barcelona/Shell";
 
@@ -103,7 +103,7 @@ export default function HistoriaPage() {
 function Nodo({ momento, delay, abierto, onToggle, onBorrar }: {
   momento: Momento; delay: number; abierto: boolean; onToggle: () => void; onBorrar: () => void;
 }) {
-  const cfg = TIPO_MOMENTO[momento.tipo] ?? TIPO_MOMENTO.otro;
+  const cfg = pintarMomento(momento.tipo, momento.titulo);
   const dia = new Date(momento.fecha + "T12:00:00").getDate();
 
   return (
