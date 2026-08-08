@@ -40,6 +40,7 @@ const SECCIONES: { titulo: string; filas: Fila[] }[] = [
       { id: "barrios",  titulo: "Barrios",  sub: "Valorados por los dos",     icon: "🌆", color: BCN.sol },
       { id: "buscar",   titulo: "Buscar",   sub: "Los nueve portales, filtrados", icon: "🔍", color: BCN.mar },
       { id: "vivienda", titulo: "Vivienda", sub: "Cada piso, una decisión",   icon: "🏠", color: BCN.tejaOsc },
+      { id: "gastos",   titulo: "Gastos",   sub: "El bote y quién pone qué",  icon: "💶", color: BCN.oliva },
     ],
   },
   {
