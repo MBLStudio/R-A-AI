@@ -285,6 +285,17 @@ function QuienHaPuesto({ balance }: { balance: ReturnType<typeof calcularBalance
         {barra("rut", "Rut", BCN.teja)}
       </div>
 
+      {(balance.personal.alejandro > 0 || balance.personal.rut > 0) && (
+        <p style={{
+          fontSize: 12, color: BCN.humo, margin: "10px 0 0", paddingTop: 9,
+          borderTop: `1px solid ${BCN.arena}`, lineHeight: 1.5,
+        }}>
+          En sus cosas: Alejandro {eurosCorto(balance.personal.alejandro)} ·
+          Rut {eurosCorto(balance.personal.rut)}
+          <span style={{ opacity: 0.75 }}> — no entra en el reparto</span>
+        </p>
+      )}
+
       <p style={{
         fontSize: 13, color: BCN.tinta, margin: "13px 0 0", paddingTop: 11,
         borderTop: `1px solid ${BCN.arena}`, lineHeight: 1.5,
@@ -359,6 +370,7 @@ function FilaGasto({ gasto, primera, onClick }: { gasto: Gasto; primera: boolean
         width: 34, height: 34, flexShrink: 0, borderRadius: 10,
         background: esAportacion ? `${BCN.oliva}1E` : `${cat.color}18`,
         display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15,
+        opacity: gasto.personal ? 0.55 : 1,
       }}>
         {esAportacion ? "＋" : cat.icon}
       </span>
@@ -372,6 +384,7 @@ function FilaGasto({ gasto, primera, onClick }: { gasto: Gasto; primera: boolean
         </span>
         <span style={{ display: "block", fontSize: 11.5, color: BCN.humo, marginTop: 1 }}>
           {dePagador}
+          {gasto.personal ? " · suyo" : ""}
           {gasto.fijo_id ? " · fijo" : ""}
           {gasto.ticket_url ? " · 🧾" : ""}
         </span>
@@ -437,6 +450,7 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
   const [pagadoPor, setPagadoPor] = useState<FormaPago>("bote");
   const [boteId, setBoteId] = useState("");
   const [cat, setCat] = useState("comida");
+  const [personal, setPersonal] = useState(false);
   const [ticket, setTicket] = useState<string | null>(null);
   const [nota, setNota] = useState("");
   const [subiendo, setSubiendo] = useState(false);
@@ -452,6 +466,7 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
     setPagadoPor(gasto?.pagado_por ?? "bote");
     setBoteId(gasto?.bote_id ?? botes[0]?.id ?? "");
     setCat(gasto?.categoria ?? "comida");
+    setPersonal(gasto?.personal ?? false);
     setTicket(gasto?.ticket_url ?? null);
     setNota(gasto?.nota ?? "");
   }, [abierta, gasto, botes]);
@@ -481,6 +496,8 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
       pagado_por: tipo === "aportacion" && pagadoPor === "bote" ? "alejandro" : pagadoPor,
       bote_id: tipo === "aportacion" || pagadoPor === "bote" ? (boteId || null) : null,
       categoria: tipo === "aportacion" ? "otros" : cat,
+      // Lo personal solo tiene sentido si lo paga una persona
+      personal: tipo === "gasto" && pagadoPor !== "bote" ? personal : false,
       ticket_url: ticket,
       nota: nota.trim() || null,
     };
@@ -577,12 +594,36 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
             Sale de la caja común, así que es de los dos.
           </p>
         )}
-        {tipo === "gasto" && pagadoPor !== "bote" && (
+        {tipo === "gasto" && pagadoPor !== "bote" && !personal && (
           <p style={{ fontSize: 12, color: BCN.humo, margin: "7px 0 0", lineHeight: 1.5 }}>
-            Lo adelanta {pagadoPor === "alejandro" ? "Alejandro" : "Rut"} y queda apuntado abajo.
+            Lo adelanta {pagadoPor === "alejandro" ? "Alejandro" : "Rut"} por los dos.
           </p>
         )}
       </Campo>
+
+      {tipo === "gasto" && pagadoPor !== "bote" && (
+        <button
+          onClick={() => setPersonal(!personal)}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+            padding: "12px 14px", borderRadius: 12, marginBottom: 16, cursor: "pointer",
+            border: `1.5px solid ${personal ? BCN.sol : BCN.arenaOsc}`,
+            background: personal ? `${BCN.sol}14` : "white",
+          }}
+        >
+          <span style={{ fontSize: 16 }}>{personal ? "🙋" : "👥"}</span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: BCN.tinta }}>
+              {personal ? "Es una cosa suya" : "Es de los dos"}
+            </span>
+            <span style={{ display: "block", fontSize: 11.5, color: BCN.humo, marginTop: 2, lineHeight: 1.4 }}>
+              {personal
+                ? "Se apunta para saberlo, pero no cuenta en el reparto."
+                : "Lo adelanta uno y el otro le debe su mitad."}
+            </span>
+          </span>
+        </button>
+      )}
 
       {botes.length > 1 && (tipo === "aportacion" || pagadoPor === "bote") && (
         <Campo label="¿Qué bote?">
@@ -709,6 +750,7 @@ function HojaFijo({ abierta, fijo, etapaId, botes, onCerrar, onGuardado }: {
   const [pagadoPor, setPagadoPor] = useState<FormaPago>("bote");
   const [boteId, setBoteId] = useState("");
   const [cat, setCat] = useState("casa");
+  const [personal, setPersonal] = useState(false);
   const [activo, setActivo] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
@@ -720,6 +762,7 @@ function HojaFijo({ abierta, fijo, etapaId, botes, onCerrar, onGuardado }: {
     setPagadoPor(fijo?.pagado_por ?? "bote");
     setBoteId(fijo?.bote_id ?? botes[0]?.id ?? "");
     setCat(fijo?.categoria ?? "casa");
+    setPersonal(fijo?.personal ?? false);
     setActivo(fijo?.activo ?? true);
   }, [abierta, fijo, botes]);
 
@@ -736,6 +779,7 @@ function HojaFijo({ abierta, fijo, etapaId, botes, onCerrar, onGuardado }: {
       pagado_por: pagadoPor,
       bote_id: pagadoPor === "bote" ? (boteId || null) : null,
       categoria: cat,
+      personal: pagadoPor !== "bote" ? personal : false,
       activo,
     };
     if (fijo) await updateFijo(fijo.id, campos);
@@ -827,6 +871,23 @@ function HojaFijo({ abierta, fijo, etapaId, botes, onCerrar, onGuardado }: {
           })}
         </div>
       </Campo>
+
+      {pagadoPor !== "bote" && (
+        <button
+          onClick={() => setPersonal(!personal)}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+            padding: "12px 14px", borderRadius: 12, marginBottom: 12, cursor: "pointer",
+            border: `1.5px solid ${personal ? BCN.sol : BCN.arenaOsc}`,
+            background: personal ? `${BCN.sol}14` : "white",
+          }}
+        >
+          <span style={{ fontSize: 16 }}>{personal ? "🙋" : "👥"}</span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: BCN.tinta }}>
+            {personal ? "Es una cosa suya" : "Es de los dos"}
+          </span>
+        </button>
+      )}
 
       <button
         onClick={() => setActivo(!activo)}

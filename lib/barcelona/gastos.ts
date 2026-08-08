@@ -37,6 +37,8 @@ export interface Gasto {
   tipo: TipoGasto;
   pagado_por: FormaPago;
   bote_id: string | null;
+  /** Cosa suya, con su dinero: no entra en el reparto. */
+  personal: boolean;
   categoria: string;
   ticket_url: string | null;
   nota: string | null;
@@ -53,6 +55,7 @@ export interface GastoFijo {
   dia: number;
   pagado_por: FormaPago;
   bote_id: string | null;
+  personal: boolean;
   categoria: string;
   activo: boolean;
   desde: string;
@@ -208,6 +211,7 @@ export async function apuntarFijosPendientes(
         tipo: "gasto",
         pagado_por: fijo.pagado_por,
         bote_id: fijo.bote_id,
+        personal: fijo.personal,
         categoria: fijo.categoria,
         fijo_id: fijo.id,
         fijo_periodo: periodo,
@@ -235,8 +239,10 @@ export function saldoDelBote(gastos: Gasto[], boteId: string): number {
 export interface Balance {
   /** Lo que ha metido cada uno en los botes. */
   aportado: { alejandro: number; rut: number };
-  /** Lo que ha adelantado cada uno de su bolsillo. */
+  /** Lo que ha adelantado cada uno de su bolsillo, por los dos. */
   bolsillo: { alejandro: number; rut: number };
+  /** Lo que se ha gastado cada uno en sus cosas. No entra en el reparto. */
+  personal: { alejandro: number; rut: number };
   /** La suma de las dos cosas. */
   total: { alejandro: number; rut: number };
   /** Cuánto ha puesto de más quien más ha puesto. */
@@ -262,6 +268,7 @@ export function calcularBalance(gastos: Gasto[]): Balance {
   const balance: Balance = {
     aportado: { alejandro: 0, rut: 0 },
     bolsillo: { alejandro: 0, rut: 0 },
+    personal: { alejandro: 0, rut: 0 },
     total: { alejandro: 0, rut: 0 },
     diferencia: 0,
     deuda: 0,
@@ -271,8 +278,16 @@ export function calcularBalance(gastos: Gasto[]): Balance {
   for (const g of gastos) {
     if (g.pagado_por !== "alejandro" && g.pagado_por !== "rut") continue;
     const quien = g.pagado_por;
-    if (g.tipo === "aportacion") balance.aportado[quien] += g.importe;
-    else balance.bolsillo[quien] += g.importe;
+
+    if (g.tipo === "aportacion") {
+      balance.aportado[quien] += g.importe;
+    } else if (g.personal) {
+      // Sus zapatillas con su dinero: se apunta para saberlo, pero
+      // nadie le debe nada a nadie por ellas.
+      balance.personal[quien] += g.importe;
+    } else {
+      balance.bolsillo[quien] += g.importe;
+    }
   }
 
   balance.total.alejandro = balance.aportado.alejandro + balance.bolsillo.alejandro;
@@ -287,11 +302,11 @@ export function calcularBalance(gastos: Gasto[]): Balance {
   return balance;
 }
 
-/** En qué se os va el dinero, de más a menos. */
+/** En qué se os va el dinero común, de más a menos. */
 export function porCategoria(gastos: Gasto[]): { clave: string; total: number }[] {
   const suma: Record<string, number> = {};
   for (const g of gastos) {
-    if (g.tipo !== "gasto") continue;
+    if (g.tipo !== "gasto" || g.personal) continue;
     suma[g.categoria] = (suma[g.categoria] ?? 0) + g.importe;
   }
   return Object.entries(suma)
@@ -304,6 +319,6 @@ export function gastadoEsteMes(gastos: Gasto[]): number {
   const ahora = new Date();
   const mes = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`;
   return gastos
-    .filter((g) => g.tipo === "gasto" && g.fecha.startsWith(mes))
+    .filter((g) => g.tipo === "gasto" && !g.personal && g.fecha.startsWith(mes))
     .reduce((t, g) => t + g.importe, 0);
 }
