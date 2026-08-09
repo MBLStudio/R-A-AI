@@ -14,6 +14,7 @@ import {
   addPiso, updatePiso, deletePiso, upsertValoracion,
 } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, Selector, IconoMas } from "@/components/barcelona/Shell";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
 
 const ESTADOS: EstadoPiso[] = ["nuevo", "contactado", "visitado", "favorito", "descartado", "elegido"];
 
@@ -163,6 +164,7 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
   onPortada: (indice: number) => void; onQuitarFoto: (indice: number) => void;
 }) {
   const cfg = ESTADO_PISO[piso.estado];
+  const visor = useVisor();
 
   return (
     <motion.div
@@ -177,7 +179,9 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
         style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
         {piso.fotos.length > 0 && (
           <div style={{ height: 150, overflow: "hidden", position: "relative" }}>
-            <img src={piso.fotos[0]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={piso.fotos[0]} alt=""
+              onClick={(e) => { e.stopPropagation(); visor.abrir(0); }}
+              style={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }} />
             <div style={{ position: "absolute", top: 10, right: 10, padding: "4px 10px", borderRadius: 14, background: "rgba(255,255,255,0.94)", fontSize: 11.5, fontWeight: 700, color: cfg.color }}>
               {cfg.icon} {cfg.label}
             </div>
@@ -228,8 +232,8 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
               {piso.fotos.length > 1 && (
                 <>
                   <p style={{ fontSize: 11.5, color: BCN.humo, margin: "12px 0 7px", lineHeight: 1.45 }}>
-                    Tocad una para ponerla de portada. La × la quita, por si es
-                    un cartel o el plano del portal.
+                    Tocad una foto para verla en grande. «Portada» la pone la primera
+                    y la × la quita, por si es un cartel o el plano del portal.
                   </p>
                   <div style={{
                     display: "flex", gap: 7, overflowX: "auto", margin: "0 -16px",
@@ -237,8 +241,8 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
                   }}>
                     {piso.fotos.map((foto, i) => (
                       <div key={foto} style={{ position: "relative", flexShrink: 0, scrollSnapAlign: "start" }}>
-                        <button onClick={() => onPortada(i)} aria-label={`Poner la foto ${i + 1} de portada`}
-                          style={{ padding: 0, border: "none", background: "none", cursor: "pointer", display: "block" }}>
+                        <button onClick={() => visor.abrir(i)} aria-label={`Ver la foto ${i + 1}`}
+                          style={{ padding: 0, border: "none", background: "none", cursor: "zoom-in", display: "block" }}>
                           <img src={foto} alt="" loading="lazy"
                             style={{
                               width: 128, height: 96, objectFit: "cover", borderRadius: 10,
@@ -246,7 +250,7 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
                               display: "block", background: BCN.arena,
                             }} />
                         </button>
-                        {i === 0 && (
+                        {i === 0 ? (
                           <span style={{
                             position: "absolute", bottom: 6, left: 6, padding: "2px 7px",
                             borderRadius: 6, background: BCN.teja, color: "white",
@@ -254,6 +258,16 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
                           }}>
                             Portada
                           </span>
+                        ) : (
+                          <button onClick={() => onPortada(i)} aria-label="Poner de portada"
+                            style={{
+                              position: "absolute", bottom: 6, left: 6, padding: "3px 8px",
+                              borderRadius: 6, border: "none", cursor: "pointer",
+                              background: "rgba(0,0,0,0.55)", color: "white",
+                              fontSize: 9.5, fontWeight: 600,
+                            }}>
+                            Portada
+                          </button>
                         )}
                         <button onClick={() => onQuitarFoto(i)} aria-label="Quitar esta foto"
                           style={{
@@ -352,6 +366,8 @@ function TarjetaPiso({ piso, barrio, contacto, compat, delay, expandido, onToggl
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Visor fotos={piso.fotos} indice={visor.indice} onCerrar={visor.cerrar} />
     </motion.div>
   );
 }

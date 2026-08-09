@@ -8,6 +8,7 @@ import {
 } from "@/lib/barcelona/types";
 import { updateMomento, deleteMomento, formatFechaLarga, nombreDia } from "@/lib/barcelona/queries";
 import { Hoja, Campo, estiloInput, Selector } from "@/components/barcelona/Shell";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
 
 /* ═══════════════════════════════════════════════════════════
    Ficha de un evento del calendario.
@@ -41,6 +42,7 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
   const [lugar, setLugar] = useState("");
   const [barrioId, setBarrioId] = useState("");
   const [contactoId, setContactoId] = useState("");
+  const visor = useVisor();
   const [autor, setAutor] = useState<Autor>("ambos");
   const [esHito, setEsHito] = useState(false);
 
@@ -262,9 +264,9 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
 
           {momento.fotos.length > 0 && (
             <div style={{ display: "flex", gap: 7, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
-              {momento.fotos.map((url) => (
-                <img key={url} src={url} alt=""
-                  style={{ width: 96, height: 96, borderRadius: 11, objectFit: "cover", flexShrink: 0, border: `1px solid ${BCN.arenaOsc}` }} />
+              {momento.fotos.map((url, i) => (
+                <img key={url} src={url} alt="" onClick={() => visor.abrir(i)}
+                  style={{ width: 96, height: 96, borderRadius: 11, objectFit: "cover", flexShrink: 0, border: `1px solid ${BCN.arenaOsc}`, cursor: "zoom-in" }} />
               ))}
             </div>
           )}
@@ -303,6 +305,7 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
           </div>
         </>
       )}
+      <Visor fotos={momento.fotos} indice={visor.indice} onCerrar={visor.cerrar} />
     </Hoja>
   );
 }

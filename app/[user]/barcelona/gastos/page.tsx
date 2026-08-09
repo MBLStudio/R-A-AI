@@ -15,6 +15,7 @@ import {
 import { getEtapaActiva, hoyISO } from "@/lib/barcelona/queries";
 import { uploadPhoto } from "@/lib/upload";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
 
 /* ═══════════════════════════════════════════════════════════
    Gastos.
@@ -455,6 +456,7 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
   const [nota, setNota] = useState("");
   const [subiendo, setSubiendo] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const visor = useVisor();
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -666,12 +668,10 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
         <Campo label="Ticket">
           {ticket ? (
             <div style={{ position: "relative", display: "inline-block" }}>
-              <a href={ticket} target="_blank" rel="noopener noreferrer">
-                <img src={ticket} alt="Ticket" style={{
-                  width: 108, height: 140, objectFit: "cover", borderRadius: 11,
-                  border: `1px solid ${BCN.arenaOsc}`, display: "block",
-                }} />
-              </a>
+              <img src={ticket} alt="Ticket" onClick={() => visor.abrir(0)} style={{
+                width: 108, height: 140, objectFit: "cover", borderRadius: 11,
+                border: `1px solid ${BCN.arenaOsc}`, display: "block", cursor: "zoom-in",
+              }} />
               <button
                 onClick={() => setTicket(null)}
                 aria-label="Quitar el ticket"
@@ -734,6 +734,8 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
           Borrar
         </button>
       )}
+
+      <Visor fotos={ticket ? [ticket] : []} indice={visor.indice} onCerrar={visor.cerrar} />
     </Hoja>
   );
 }

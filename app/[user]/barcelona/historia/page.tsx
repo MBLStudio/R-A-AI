@@ -7,6 +7,7 @@ import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, TIPO_MOMENTO, pintarMomento, type Momento, type Etapa } from "@/lib/barcelona/types";
 import { getEtapaActiva, getHistoria, deleteMomento } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, IconoMas } from "@/components/barcelona/Shell";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
 
 export default function HistoriaPage() {
   const params = useParams();
@@ -103,6 +104,7 @@ export default function HistoriaPage() {
 function Nodo({ momento, delay, abierto, onToggle, onBorrar }: {
   momento: Momento; delay: number; abierto: boolean; onToggle: () => void; onBorrar: () => void;
 }) {
+  const visor = useVisor();
   const cfg = pintarMomento(momento.tipo, momento.titulo);
   const dia = new Date(momento.fecha + "T12:00:00").getDate();
 
@@ -160,12 +162,14 @@ function Nodo({ momento, delay, abierto, onToggle, onBorrar }: {
 
           {momento.fotos.length > 0 && (
             <div style={{ display: "flex", gap: 6, marginTop: 10, overflowX: "auto" }}>
-              {momento.fotos.map((url) => (
+              {momento.fotos.map((url, i) => (
                 <img key={url} src={url} alt=""
+                  onClick={(e) => { e.stopPropagation(); visor.abrir(i); }}
                   style={{
                     width: abierto ? 130 : 74, height: abierto ? 130 : 74,
                     borderRadius: 10, objectFit: "cover", flexShrink: 0,
                     border: `1px solid ${BCN.arenaOsc}`, transition: "all 0.25s",
+                    cursor: "zoom-in",
                   }} />
               ))}
             </div>
@@ -181,6 +185,8 @@ function Nodo({ momento, delay, abierto, onToggle, onBorrar }: {
           </motion.button>
         )}
       </div>
+
+      <Visor fotos={momento.fotos} indice={visor.indice} onCerrar={visor.cerrar} />
     </motion.div>
   );
 }

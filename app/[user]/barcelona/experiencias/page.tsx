@@ -7,6 +7,7 @@ import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, TIPO_MOMENTO, pintarMomento, TIPOS_EXPERIENCIA, type Momento, type TipoMomento } from "@/lib/barcelona/types";
 import { getEtapaActiva, getHistoria, formatFechaLarga } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Selector, IconoMas } from "@/components/barcelona/Shell";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
 
 export default function ExperienciasPage() {
   const params = useParams();
@@ -79,6 +80,7 @@ export default function ExperienciasPage() {
 function Recuerdo({ momento, delay }: { momento: Momento; delay: number }) {
   const cfg = pintarMomento(momento.tipo, momento.titulo);
   const [ampliada, setAmpliada] = useState(false);
+  const visor = useVisor();
 
   return (
     <motion.div
@@ -92,9 +94,10 @@ function Recuerdo({ momento, delay }: { momento: Momento; delay: number }) {
         <button onClick={() => setAmpliada(!ampliada)}
           style={{ display: "block", width: "100%", border: "none", padding: 0, cursor: "pointer", background: "none" }}>
           <div style={{ display: "flex", gap: 2, height: ampliada ? 260 : 170, transition: "height 0.3s" }}>
-            {momento.fotos.slice(0, ampliada ? 1 : 3).map((url) => (
+            {momento.fotos.slice(0, ampliada ? 1 : 3).map((url, i) => (
               <img key={url} src={url} alt=""
-                style={{ flex: 1, height: "100%", objectFit: "cover", minWidth: 0 }} />
+                onClick={(e) => { e.stopPropagation(); visor.abrir(i); }}
+                style={{ flex: 1, height: "100%", objectFit: "cover", minWidth: 0, cursor: "zoom-in" }} />
             ))}
           </div>
         </button>
@@ -127,6 +130,8 @@ function Recuerdo({ momento, delay }: { momento: Momento; delay: number }) {
           </div>
         )}
       </div>
+
+      <Visor fotos={momento.fotos} indice={visor.indice} onCerrar={visor.cerrar} />
     </motion.div>
   );
 }
