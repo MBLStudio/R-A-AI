@@ -9,7 +9,7 @@ import {
   type TipoMomento, type Barrio, type Etapa, type Contacto,
 } from "@/lib/barcelona/types";
 import { getEtapaActiva, getBarrios, getContactos, addMomento, hoyISO } from "@/lib/barcelona/queries";
-import { uploadPhoto } from "@/lib/upload";
+import { subirFoto as subirAlServidor } from "@/lib/upload";
 import { Pantalla, Campo, estiloInput, Boton } from "@/components/barcelona/Shell";
 
 /** Atajos para no teclear. No es una lista cerrada: se puede escribir lo que sea. */
@@ -41,6 +41,7 @@ export default function MomentoPage() {
   const [esHito, setEsHito] = useState(false);
   const [fotos, setFotos] = useState<string[]>([]);
   const [subiendo, setSubiendo] = useState(false);
+  const [falloFoto, setFalloFoto] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -109,13 +110,30 @@ export default function MomentoPage() {
   const subirFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0) return;
+
     setSubiendo(true);
+    setFalloFoto(null);
+
     const urls: string[] = [];
+    let fallidas = 0;
+    let motivo: string | null = null;
+
     for (const f of files) {
-      const url = await uploadPhoto(f, "barcelona");
-      if (url) urls.push(url);
+      const r = await subirAlServidor(f, "barcelona");
+      if (r.url) urls.push(r.url);
+      else { fallidas++; motivo = r.error; }
     }
+
     setFotos((prev) => [...prev, ...urls]);
+    // Si alguna se queda por el camino, hay que decirlo: antes fallaba en
+    // silencio y parecía que la app se había quedado colgada.
+    if (fallidas > 0) {
+      setFalloFoto(
+        fallidas === files.length
+          ? (motivo ?? "No hemos podido subir la foto.")
+          : `${fallidas} de ${files.length} no han subido. ${motivo ?? ""}`.trim()
+      );
+    }
     setSubiendo(false);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -329,6 +347,17 @@ export default function MomentoPage() {
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple onChange={subirFoto}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }} />
+
+        {subiendo && (
+          <p style={{ fontSize: 12.5, color: BCN.humo, margin: "8px 0 0" }}>
+            Subiendo…
+          </p>
+        )}
+        {falloFoto && !subiendo && (
+          <p style={{ fontSize: 12.5, color: BCN.teja, margin: "8px 0 0", lineHeight: 1.5 }}>
+            {falloFoto}
+          </p>
+        )}
       </Campo>
 
       {/* Hito */}
