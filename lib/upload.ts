@@ -25,7 +25,14 @@ async function encoger(file: File): Promise<File> {
   if (typeof createImageBitmap !== "function") return file;
 
   try {
-    const imagen = await createImageBitmap(file);
+    // «from-image» es la clave de que la foto no salga tumbada.
+    //
+    // El móvil no gira la foto al hacerla: la guarda como salió del
+    // sensor y le pega una nota que dice cómo hay que darle la vuelta.
+    // Al pasarla por el lienzo esa nota se pierde, así que hay que
+    // pedir que la aplique antes. Luego se exporta ya derecha y sin
+    // nota, que es a prueba de todo.
+    const imagen = await createImageBitmap(file, { imageOrientation: "from-image" });
     const escala = Math.min(1, LADO_MAXIMO / Math.max(imagen.width, imagen.height));
 
     // Ya cabe: si aun así pesa, la recomprimimos igual
