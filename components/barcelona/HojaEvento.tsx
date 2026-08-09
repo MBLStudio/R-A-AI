@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   BCN, TIPO_MOMENTO, pintarMomento, TIPOS_EXPERIENCIA,
   type Momento, type TipoMomento, type Barrio, type Autor, type Contacto,
 } from "@/lib/barcelona/types";
 import { updateMomento, deleteMomento, formatFechaLarga, nombreDia } from "@/lib/barcelona/queries";
+import { subirFoto } from "@/lib/upload";
 import { Hoja, Campo, estiloInput, Selector } from "@/components/barcelona/Shell";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
 
@@ -45,6 +46,10 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
   const visor = useVisor();
   const [autor, setAutor] = useState<Autor>("ambos");
   const [esHito, setEsHito] = useState(false);
+  const [fotos, setFotos] = useState<string[]>([]);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [falloFoto, setFalloFoto] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Al abrir otro evento, volvemos a modo lectura y recargamos campos.
   useEffect(() => {
@@ -61,6 +66,8 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
     setContactoId(momento.contacto_id ?? "");
     setAutor(momento.autor);
     setEsHito(momento.es_hito);
+    setFotos(momento.fotos ?? []);
+    setFalloFoto(null);
   }, [momento]);
 
   if (!momento) return <Hoja abierta={false} onCerrar={onCerrar} titulo="">{null}</Hoja>;
@@ -82,10 +89,40 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
       contacto_id: contactoId || null,
       autor,
       es_hito: esHito,
+      fotos,
     });
     setGuardando(false);
     setEditando(false);
     onCambio();
+  };
+
+  const anadirFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const elegidas = Array.from(e.target.files ?? []);
+    if (elegidas.length === 0) return;
+
+    setSubiendoFoto(true);
+    setFalloFoto(null);
+
+    const nuevas: string[] = [];
+    let fallidas = 0;
+    let motivo: string | null = null;
+
+    for (const f of elegidas) {
+      const r = await subirFoto(f, "barcelona");
+      if (r.url) nuevas.push(r.url);
+      else { fallidas++; motivo = r.error; }
+    }
+
+    setFotos((antes) => [...antes, ...nuevas]);
+    if (fallidas > 0) {
+      setFalloFoto(
+        fallidas === elegidas.length
+          ? (motivo ?? "No hemos podido subir la foto.")
+          : `${fallidas} de ${elegidas.length} no han subido.`
+      );
+    }
+    setSubiendoFoto(false);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
   const alternarHecho = async () => {
@@ -185,6 +222,48 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
                 { valor: "alejandro" as Autor, label: "Alejandro" },
                 { valor: "rut" as Autor,       label: "Rut" },
               ]} />
+          </Campo>
+
+          <Campo label="Fotos">
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {fotos.map((url, i) => (
+                <div key={url} style={{ position: "relative", width: 74, height: 74 }}>
+                  <img src={url} alt="" onClick={() => visor.abrir(i)}
+                    style={{
+                      width: "100%", height: "100%", objectFit: "cover", borderRadius: 12,
+                      border: `1px solid ${BCN.arenaOsc}`, display: "block", cursor: "zoom-in",
+                    }} />
+                  <button
+                    onClick={() => setFotos(fotos.filter((_, j) => j !== i))}
+                    aria-label="Quitar esta foto"
+                    style={{
+                      position: "absolute", top: -6, right: -6, width: 24, height: 24,
+                      borderRadius: "50%", border: `2px solid white`, cursor: "pointer",
+                      background: BCN.teja, color: "white", fontSize: 13, lineHeight: 1, padding: 0,
+                    }}>
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              <button onClick={() => fileRef.current?.click()} disabled={subiendoFoto}
+                style={{
+                  width: 74, height: 74, borderRadius: 12, cursor: "pointer",
+                  border: `1.5px dashed ${BCN.arenaOsc}`, background: "white",
+                  color: BCN.humo, fontSize: 22,
+                }}>
+                {subiendoFoto ? "…" : "+"}
+              </button>
+            </div>
+
+            <input ref={fileRef} type="file" accept="image/*" multiple onChange={anadirFotos}
+              style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }} />
+
+            {falloFoto && !subiendoFoto && (
+              <p style={{ fontSize: 12.5, color: BCN.teja, margin: "8px 0 0", lineHeight: 1.5 }}>
+                {falloFoto}
+              </p>
+            )}
           </Campo>
 
           <button onClick={() => setEsHito(!esHito)}
@@ -305,7 +384,7 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
           </div>
         </>
       )}
-      <Visor fotos={momento.fotos} indice={visor.indice} onCerrar={visor.cerrar} />
+      <Visor fotos={editando ? fotos : momento.fotos} indice={visor.indice} onCerrar={visor.cerrar} />
     </Hoja>
   );
 }
