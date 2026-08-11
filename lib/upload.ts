@@ -8,16 +8,16 @@
 // fallaban sin decir nada, así que unas fotos entraban y otras
 // no según lo que hubiera salido en la cámara.
 //
-// Encogida a 1920 píxeles se queda en menos de medio mega, sube
-// en un suspiro con datos móviles y en una pantalla se ve
-// exactamente igual.
+// A 3200 píxeles se queda sobre un mega: entra de sobra, sube
+// rápido y aguanta el zoom hasta casi tres aumentos, que es lo
+// que se usa de verdad al mirar una cara de cerca.
 // ============================================================
 
-const LADO_MAXIMO = 1920;
-const CALIDAD = 0.82;
+const LADO_MAXIMO = 3200;
+const CALIDAD = 0.88;
 
 /** Fotos ya pequeñas, gifs y demás: no vale la pena tocarlas. */
-const NO_TOCAR = 900 * 1024;
+const NO_TOCAR = 1_400 * 1024;
 
 async function encoger(file: File): Promise<File> {
   if (file.size <= NO_TOCAR) return file;
