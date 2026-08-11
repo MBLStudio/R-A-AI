@@ -221,7 +221,7 @@ export default function LibroPage() {
                             {p.hoja} de {p.hojas}
                           </p>
                         )}
-                        <Collage fotos={p.fotos} onVer={(i) => visor.abrir(p.desde + i)} />
+                        <Collage fotos={p.fotos} hoja={p.hoja} onVer={(i) => visor.abrir(p.desde + i)} />
                       </div>
                     );
                   }
@@ -353,59 +353,123 @@ const flechaLibro: React.CSSProperties = {
 };
 
 /* ─── El collage ───────────────────────────────────────────────
-   Seis fotos por hoja, con la primera mandando y las demás
-   alrededor. Van algo torcidas y se pisan un poco entre ellas,
-   como cuando dejas las fotos sueltas encima de la mesa.
+   Nada de cuadrícula: las fotos se tiran sobre la hoja.
+
+   Cada una cae en su sitio, girada lo suyo, tapando a la de al
+   lado, y algunas se salen por el borde y quedan cortadas. Hay
+   polaroids con su marco blanco y trozos de cinta sujetando
+   alguna esquina.
+
+   Las posiciones están escritas a mano, no calculadas: un
+   desorden de verdad hay que colocarlo.
    ─────────────────────────────────────────────────────────── */
 
-/** Cómo se coloca cada una: columnas, filas, giro y a quién tapa. */
-const HUECOS = [
-  { col: "1 / 4", fila: "1 / 3", giro: -1.6, z: 3, margen: "0" },
-  { col: "4 / 7", fila: "1 / 2", giro: 2.2,  z: 2, margen: "0 0 0 -10px" },
-  { col: "4 / 7", fila: "2 / 3", giro: -2.4, z: 4, margen: "-12px 0 0 -6px" },
-  { col: "1 / 3", fila: "3 / 4", giro: 2.8,  z: 2, margen: "-10px 0 0 0" },
-  { col: "3 / 5", fila: "3 / 4", giro: -2,   z: 5, margen: "-16px 0 0 -8px" },
-  { col: "5 / 7", fila: "3 / 4", giro: 1.8,  z: 3, margen: "-8px 0 0 -8px" },
+interface Sitio {
+  x: number;      // desde la izquierda, en %
+  y: number;      // desde arriba, en %
+  ancho: number;  // en % de la hoja
+  alto: number;   // proporción respecto al ancho
+  giro: number;
+  z: number;
+  polaroid?: boolean;
+  cinta?: "izq" | "der" | null;
+}
+
+/** Tres maneras de tirar las fotos, para que no haya dos hojas iguales. */
+const COMPOSICIONES: Sitio[][] = [
+  [
+    { x: 3,   y: 2,  ancho: 44, alto: 1.22, giro: -4,   z: 3, cinta: "izq" },
+    { x: 55,  y: 8,  ancho: 36, alto: 1.0,  giro: 7,    z: 4 },
+    { x: 32,  y: 34, ancho: 38, alto: 1.12, giro: -9,   z: 6, polaroid: true },
+    { x: -4,  y: 50, ancho: 32, alto: 0.95, giro: 5,    z: 2 },
+    { x: 58,  y: 46, ancho: 40, alto: 1.2,  giro: -3,   z: 5, cinta: "der" },
+    { x: 18,  y: 76, ancho: 34, alto: 0.92, giro: 12,   z: 7, polaroid: true },
+  ],
+  [
+    { x: 26,  y: 1,  ancho: 40, alto: 1.08, giro: 4,    z: 4, cinta: "der" },
+    { x: -5,  y: 14, ancho: 34, alto: 1.24, giro: -8,   z: 5 },
+    { x: 60,  y: 26, ancho: 38, alto: 0.94, giro: 6,    z: 3, polaroid: true },
+    { x: 8,   y: 48, ancho: 42, alto: 1.06, giro: -3,   z: 6 },
+    { x: 56,  y: 62, ancho: 36, alto: 1.18, giro: 9,    z: 7, cinta: "izq" },
+    { x: 1,   y: 79, ancho: 32, alto: 0.9,  giro: -7,   z: 2 },
+  ],
+  [
+    { x: 6,   y: 4,  ancho: 38, alto: 1.14, giro: 6,    z: 4, polaroid: true },
+    { x: 54,  y: -3, ancho: 42, alto: 1.02, giro: -5,   z: 2 },
+    { x: 30,  y: 30, ancho: 40, alto: 1.0,  giro: 10,   z: 6, cinta: "izq" },
+    { x: -5,  y: 44, ancho: 34, alto: 1.2,  giro: -8,   z: 5 },
+    { x: 60,  y: 58, ancho: 38, alto: 0.92, giro: 3,    z: 3 },
+    { x: 14,  y: 76, ancho: 36, alto: 1.06, giro: -11,  z: 7, polaroid: true },
+  ],
 ];
 
-function Collage({ fotos, onVer }: { fotos: string[]; onVer: (i: number) => void }) {
+function Collage({ fotos, hoja, onVer }: {
+  fotos: string[]; hoja: number; onVer: (i: number) => void;
+}) {
+  const sitios = COMPOSICIONES[(hoja - 1) % COMPOSICIONES.length];
+
   return (
     <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(6, 1fr)",
-      gridTemplateRows: "repeat(3, 1fr)",
-      gap: 5,
-      aspectRatio: "1 / 1.05",
+      position: "relative",
+      width: "100%",
+      aspectRatio: "1 / 1.18",
+      // Lo que se sale de la hoja se corta: ese es medio truco
+      overflow: "hidden",
     }}>
       {fotos.map((url, i) => {
-        const h = HUECOS[i % HUECOS.length];
+        const s = sitios[i % sitios.length];
+        const marco = s.polaroid ? "7px 7px 20px" : "5px";
+
         return (
           <button
             key={url}
             onClick={() => onVer(i)}
             aria-label={`Ver la foto ${i + 1}`}
             style={{
-              gridColumn: h.col,
-              gridRow: h.fila,
-              zIndex: h.z,
-              margin: h.margen,
-              padding: 5,
+              position: "absolute",
+              left: `${s.x}%`,
+              top: `${s.y}%`,
+              width: `${s.ancho}%`,
+              zIndex: s.z,
+              padding: marco,
               border: "none",
               cursor: "zoom-in",
-              // El borde blanco es el de las fotos reveladas de siempre
               background: "white",
-              borderRadius: 3,
-              transform: `rotate(${h.giro}deg)`,
-              boxShadow: "0 3px 12px rgba(44,36,32,0.22)",
-              overflow: "hidden",
+              borderRadius: 2,
+              transform: `rotate(${s.giro}deg)`,
+              boxShadow: "0 4px 14px rgba(44,36,32,0.26), 0 1px 3px rgba(44,36,32,0.2)",
             }}
           >
-            <img
-              src={url}
-              alt=""
-              loading="lazy"
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 1 }}
-            />
+            <span style={{
+              display: "block",
+              width: "100%",
+              aspectRatio: `1 / ${s.alto}`,
+              overflow: "hidden",
+              background: BCN.arena,
+            }}>
+              <img
+                src={url}
+                alt=""
+                loading="lazy"
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            </span>
+
+            {/* Un trozo de cinta sujetando la esquina */}
+            {s.cinta && (
+              <span style={{
+                position: "absolute",
+                top: -9,
+                [s.cinta === "izq" ? "left" : "right"]: "14%",
+                width: "30%",
+                height: 19,
+                background: "rgba(232,163,61,0.34)",
+                borderLeft: "1px solid rgba(255,255,255,0.4)",
+                borderRight: "1px solid rgba(255,255,255,0.4)",
+                transform: `rotate(${s.cinta === "izq" ? -18 : 16}deg)`,
+                boxShadow: "0 1px 2px rgba(44,36,32,0.14)",
+              }} />
+            )}
           </button>
         );
       })}
