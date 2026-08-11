@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, type Etapa, type Momento } from "@/lib/barcelona/types";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
 import { getEtapaActiva, getHistoria, diasEnCiudad, formatFechaLarga } from "@/lib/barcelona/queries";
 
 /* ═══════════════════════════════════════════════════════════
@@ -18,7 +19,7 @@ import { getEtapaActiva, getHistoria, diasEnCiudad, formatFechaLarga } from "@/l
 type Pagina =
   | { tipo: "portada" }
   | { tipo: "texto"; parrafos: string[]; n: number }
-  | { tipo: "album"; fotos: string[] }
+  | { tipo: "album"; fotos: string[]; desde: number; hoja: number; hojas: number }
   | { tipo: "final" };
 
 export default function LibroPage() {
@@ -33,6 +34,7 @@ export default function LibroPage() {
   const [regenerando, setRegenerando] = useState(false);
 
   const [pagina, setPagina] = useState(0);
+  const visor = useVisor();
   const [sentido, setSentido] = useState(1);
 
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
@@ -74,7 +76,22 @@ export default function LibroPage() {
       }
     }
 
-    if (fotos.length > 0) p.push({ tipo: "album", fotos: fotos.slice(0, 9) });
+    // Todas las fotos, no solo las primeras: se reparten en hojas
+    // de seis, que es lo que cabe en el collage sin apelotonarse.
+    if (fotos.length > 0) {
+      const POR_HOJA = 6;
+      const hojas = Math.ceil(fotos.length / POR_HOJA);
+      for (let h = 0; h < hojas; h++) {
+        const desde = h * POR_HOJA;
+        p.push({
+          tipo: "album",
+          fotos: fotos.slice(desde, desde + POR_HOJA),
+          desde,
+          hoja: h + 1,
+          hojas,
+        });
+      }
+    }
     p.push({ tipo: "final" });
     return p;
   }, [texto, fotos]);
@@ -196,21 +213,15 @@ export default function LibroPage() {
                   if (p.tipo === "album") {
                     return (
                       <div>
-                        <p style={{ fontFamily: "Georgia, serif", fontSize: 19, color: BCN.tinta, margin: "0 0 16px", textAlign: "center" }}>
+                        <p style={{ fontFamily: "Georgia, serif", fontSize: 19, color: BCN.tinta, margin: "0 0 4px", textAlign: "center" }}>
                           El álbum
                         </p>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
-                          {p.fotos.map((url, i) => (
-                            <div key={url} style={{
-                              aspectRatio: "1", borderRadius: 7, overflow: "hidden",
-                              border: `1px solid ${BCN.arenaOsc}`,
-                              transform: `rotate(${(i % 3 - 1) * 1.4}deg)`,
-                              boxShadow: "0 2px 8px rgba(44,36,32,0.12)",
-                            }}>
-                              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                            </div>
-                          ))}
-                        </div>
+                        {p.hojas > 1 && (
+                          <p style={{ fontSize: 11, color: BCN.humo, textAlign: "center", margin: "0 0 14px", letterSpacing: "0.05em" }}>
+                            {p.hoja} de {p.hojas}
+                          </p>
+                        )}
+                        <Collage fotos={p.fotos} onVer={(i) => visor.abrir(p.desde + i)} />
                       </div>
                     );
                   }
@@ -251,6 +262,10 @@ export default function LibroPage() {
             style={{ ...flechaLibro, opacity: pagina === total - 1 ? 0.22 : 1 }}>›</button>
         </div>
       )}
+
+      {/* El visor recibe TODAS las fotos, no las de esta hoja: así se
+          pueden recorrer enteras sin volver a pasar páginas. */}
+      <Visor fotos={fotos} indice={visor.indice} onCerrar={visor.cerrar} />
     </div>
   );
 }
@@ -336,3 +351,64 @@ const flechaLibro: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   transition: "opacity 0.2s",
 };
+
+/* ─── El collage ───────────────────────────────────────────────
+   Seis fotos por hoja, con la primera mandando y las demás
+   alrededor. Van algo torcidas y se pisan un poco entre ellas,
+   como cuando dejas las fotos sueltas encima de la mesa.
+   ─────────────────────────────────────────────────────────── */
+
+/** Cómo se coloca cada una: columnas, filas, giro y a quién tapa. */
+const HUECOS = [
+  { col: "1 / 4", fila: "1 / 3", giro: -1.6, z: 3, margen: "0" },
+  { col: "4 / 7", fila: "1 / 2", giro: 2.2,  z: 2, margen: "0 0 0 -10px" },
+  { col: "4 / 7", fila: "2 / 3", giro: -2.4, z: 4, margen: "-12px 0 0 -6px" },
+  { col: "1 / 3", fila: "3 / 4", giro: 2.8,  z: 2, margen: "-10px 0 0 0" },
+  { col: "3 / 5", fila: "3 / 4", giro: -2,   z: 5, margen: "-16px 0 0 -8px" },
+  { col: "5 / 7", fila: "3 / 4", giro: 1.8,  z: 3, margen: "-8px 0 0 -8px" },
+];
+
+function Collage({ fotos, onVer }: { fotos: string[]; onVer: (i: number) => void }) {
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(6, 1fr)",
+      gridTemplateRows: "repeat(3, 1fr)",
+      gap: 5,
+      aspectRatio: "1 / 1.05",
+    }}>
+      {fotos.map((url, i) => {
+        const h = HUECOS[i % HUECOS.length];
+        return (
+          <button
+            key={url}
+            onClick={() => onVer(i)}
+            aria-label={`Ver la foto ${i + 1}`}
+            style={{
+              gridColumn: h.col,
+              gridRow: h.fila,
+              zIndex: h.z,
+              margin: h.margen,
+              padding: 5,
+              border: "none",
+              cursor: "zoom-in",
+              // El borde blanco es el de las fotos reveladas de siempre
+              background: "white",
+              borderRadius: 3,
+              transform: `rotate(${h.giro}deg)`,
+              boxShadow: "0 3px 12px rgba(44,36,32,0.22)",
+              overflow: "hidden",
+            }}
+          >
+            <img
+              src={url}
+              alt=""
+              loading="lazy"
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 1 }}
+            />
+          </button>
+        );
+      })}
+    </div>
+  );
+}

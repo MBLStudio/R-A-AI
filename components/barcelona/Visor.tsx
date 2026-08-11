@@ -6,10 +6,25 @@ import { motion, AnimatePresence } from "framer-motion";
 /* ═══════════════════════════════════════════════════════════
    Ver una foto en grande.
 
-   Se abre a pantalla completa sobre lo que estuvieras mirando.
-   Se pasa de una a otra deslizando, se cierra tocando fuera,
-   con la flecha del móvil o con Escape.
+   Se abre a pantalla completa. Se hace zoom pellizcando o con
+   dos toques, se arrastra cuando está ampliada, se pasa de una
+   a otra deslizando y se cierra tirando hacia abajo.
+
+   Mientras hay zoom, deslizar mueve la foto en vez de cambiarla:
+   si no, sería imposible mirar una esquina sin salirse.
    ═══════════════════════════════════════════════════════════ */
+
+const ZOOM_MAX = 5;
+const ZOOM_DOBLE_TOQUE = 2.6;
+
+interface Gesto {
+  modo: "nada" | "pellizco" | "mover" | "deslizar";
+  x: number;
+  y: number;
+  distancia: number;
+  escalaInicial: number;
+  posInicial: { x: number; y: number };
+}
 
 export function Visor({ fotos, indice, onCerrar }: {
   fotos: string[];
@@ -18,30 +33,140 @@ export function Visor({ fotos, indice, onCerrar }: {
   onCerrar: () => void;
 }) {
   const [actual, setActual] = useState(0);
-  const tocado = useRef<{ x: number; y: number } | null>(null);
+  const [escala, setEscala] = useState(1);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    if (indice !== null) setActual(indice);
-  }, [indice]);
+  const gesto = useRef<Gesto | null>(null);
+  const ultimoToque = useRef(0);
+  const marco = useRef<HTMLDivElement>(null);
 
   const abierto = indice !== null && fotos.length > 0;
+  const varias = fotos.length > 1;
+  const ampliada = escala > 1.02;
+
+  const reiniciarZoom = useCallback(() => {
+    setEscala(1);
+    setPos({ x: 0, y: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (indice !== null) { setActual(indice); reiniciarZoom(); }
+  }, [indice, reiniciarZoom]);
 
   const ir = useCallback((paso: number) => {
+    reiniciarZoom();
     setActual((n) => (n + paso + fotos.length) % fotos.length);
-  }, [fotos.length]);
+  }, [fotos.length, reiniciarZoom]);
 
-  // Teclado en el ordenador, y el botón atrás del móvil
+  /** Que la foto no se pueda arrastrar hasta perderla de vista. */
+  const limitar = useCallback((p: { x: number; y: number }, e: number) => {
+    const caja = marco.current?.getBoundingClientRect();
+    if (!caja) return p;
+    const margenX = (caja.width * (e - 1)) / 2;
+    const margenY = (caja.height * (e - 1)) / 2;
+    return {
+      x: Math.max(-margenX, Math.min(margenX, p.x)),
+      y: Math.max(-margenY, Math.min(margenY, p.y)),
+    };
+  }, []);
+
+  /* ─── Gestos ─────────────────────────────────────────────── */
+
+  const alTocar = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      gesto.current = {
+        modo: "pellizco",
+        x: (a.clientX + b.clientX) / 2,
+        y: (a.clientY + b.clientY) / 2,
+        distancia: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY),
+        escalaInicial: escala,
+        posInicial: pos,
+      };
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      // Dos toques seguidos: acercar o volver
+      const ahora = Date.now();
+      if (ahora - ultimoToque.current < 280) {
+        ultimoToque.current = 0;
+        if (ampliada) reiniciarZoom();
+        else setEscala(ZOOM_DOBLE_TOQUE);
+        gesto.current = null;
+        return;
+      }
+      ultimoToque.current = ahora;
+
+      gesto.current = {
+        modo: ampliada ? "mover" : "deslizar",
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        distancia: 0,
+        escalaInicial: escala,
+        posInicial: pos,
+      };
+    }
+  };
+
+  const alMover = (e: React.TouchEvent) => {
+    const g = gesto.current;
+    if (!g) return;
+
+    if (g.modo === "pellizco" && e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const ahora = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+      const nueva = Math.max(1, Math.min(ZOOM_MAX, g.escalaInicial * (ahora / g.distancia)));
+      setEscala(nueva);
+      setPos((p) => limitar(p, nueva));
+      return;
+    }
+
+    if (g.modo === "mover" && e.touches.length === 1) {
+      const nueva = {
+        x: g.posInicial.x + (e.touches[0].clientX - g.x),
+        y: g.posInicial.y + (e.touches[0].clientY - g.y),
+      };
+      setPos(limitar(nueva, escala));
+    }
+  };
+
+  const alSoltar = (e: React.TouchEvent) => {
+    const g = gesto.current;
+    gesto.current = null;
+    if (!g) return;
+
+    if (g.modo === "pellizco") {
+      // Al aflojar del todo, la foto vuelve sola a su sitio
+      if (escala < 1.05) reiniciarZoom();
+      return;
+    }
+
+    if (g.modo !== "deslizar") return;
+
+    const t = e.changedTouches[0];
+    const dx = t.clientX - g.x;
+    const dy = t.clientY - g.y;
+
+    if (Math.abs(dy) > 90 && Math.abs(dy) > Math.abs(dx)) { onCerrar(); return; }
+    if (varias && Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) ir(dx < 0 ? 1 : -1);
+  };
+
+  /* ─── Teclado y botón atrás ──────────────────────────────── */
+
   useEffect(() => {
     if (!abierto) return;
 
     const teclas = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCerrar();
+      if (e.key === "Escape") { if (ampliada) reiniciarZoom(); else onCerrar(); }
       if (e.key === "ArrowRight") ir(1);
       if (e.key === "ArrowLeft") ir(-1);
+      if (e.key === "+" || e.key === "=") setEscala((s) => Math.min(ZOOM_MAX, s * 1.35));
+      if (e.key === "-") setEscala((s) => Math.max(1, s / 1.35));
     };
 
-    // Metemos una entrada en el historial: así el gesto de volver
-    // cierra la foto en vez de sacarte de la pantalla.
+    // Una entrada en el historial: así el gesto de volver cierra la
+    // foto en vez de sacarte de la pantalla que estabas mirando.
     window.history.pushState({ visor: true }, "");
     const atras = () => onCerrar();
 
@@ -50,10 +175,9 @@ export function Visor({ fotos, indice, onCerrar }: {
     return () => {
       window.removeEventListener("keydown", teclas);
       window.removeEventListener("popstate", atras);
-      // Si se cerró de otra forma, deshacemos la entrada que metimos
       if (window.history.state?.visor) window.history.back();
     };
-  }, [abierto, ir, onCerrar]);
+  }, [abierto, ir, onCerrar, ampliada, reiniciarZoom]);
 
   // Mientras se mira una foto, el fondo no se mueve
   useEffect(() => {
@@ -63,7 +187,15 @@ export function Visor({ fotos, indice, onCerrar }: {
     return () => { document.body.style.overflow = antes; };
   }, [abierto]);
 
-  const varias = fotos.length > 1;
+  /** Rueda del ratón, para el ordenador. */
+  const alaRueda = (e: React.WheelEvent) => {
+    e.stopPropagation();
+    setEscala((s) => {
+      const nueva = Math.max(1, Math.min(ZOOM_MAX, s * (e.deltaY < 0 ? 1.14 : 0.88)));
+      if (nueva <= 1.02) setPos({ x: 0, y: 0 });
+      return nueva;
+    });
+  };
 
   return (
     <AnimatePresence>
@@ -73,43 +205,53 @@ export function Visor({ fotos, indice, onCerrar }: {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
-          onClick={onCerrar}
-          onTouchStart={(e) => {
-            tocado.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-          }}
-          onTouchEnd={(e) => {
-            if (!tocado.current) return;
-            const dx = e.changedTouches[0].clientX - tocado.current.x;
-            const dy = e.changedTouches[0].clientY - tocado.current.y;
-            tocado.current = null;
-            // Hacia abajo se cierra; a los lados se cambia de foto
-            if (Math.abs(dy) > 90 && Math.abs(dy) > Math.abs(dx)) { onCerrar(); return; }
-            if (varias && Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy)) ir(dx < 0 ? 1 : -1);
-          }}
+          onClick={() => { if (!ampliada) onCerrar(); }}
+          onTouchStart={alTocar}
+          onTouchMove={alMover}
+          onTouchEnd={alSoltar}
+          onWheel={alaRueda}
           style={{
             position: "fixed", inset: 0, zIndex: 200,
-            background: "rgba(12,8,6,0.95)",
+            background: "rgba(12,8,6,0.96)",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: "env(safe-area-inset-top) 0 env(safe-area-inset-bottom)",
-            touchAction: "none",
+            touchAction: "none", overflow: "hidden",
           }}
         >
-          <motion.img
-            key={fotos[actual]}
-            src={fotos[actual]}
-            alt=""
-            initial={{ scale: 0.94, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
-            onClick={(e) => e.stopPropagation()}
+          <div
+            ref={marco}
             style={{
-              maxWidth: "100%", maxHeight: "100%",
-              objectFit: "contain", display: "block",
+              width: "100%", height: "100%",
+              display: "flex", alignItems: "center", justifyContent: "center",
             }}
-          />
+          >
+            <motion.img
+              key={fotos[actual]}
+              src={fotos[actual]}
+              alt=""
+              draggable={false}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.18 }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                if (ampliada) reiniciarZoom(); else setEscala(ZOOM_DOBLE_TOQUE);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: "100%", maxHeight: "100%",
+                objectFit: "contain", display: "block",
+                transform: `translate3d(${pos.x}px, ${pos.y}px, 0) scale(${escala})`,
+                // Sin transición mientras se pellizca: si no, va a tirones
+                transition: gesto.current ? "none" : "transform .22s ease-out",
+                cursor: ampliada ? "grab" : "zoom-in",
+                willChange: "transform",
+              }}
+            />
+          </div>
 
           <button
-            onClick={onCerrar}
+            onClick={(e) => { e.stopPropagation(); onCerrar(); }}
             aria-label="Cerrar"
             style={{
               position: "absolute", top: "calc(14px + env(safe-area-inset-top))", right: 14,
@@ -121,7 +263,21 @@ export function Visor({ fotos, indice, onCerrar }: {
             ×
           </button>
 
-          {varias && (
+          {ampliada && (
+            <button
+              onClick={(e) => { e.stopPropagation(); reiniciarZoom(); }}
+              style={{
+                position: "absolute", top: "calc(14px + env(safe-area-inset-top))", left: 14,
+                padding: "8px 14px", borderRadius: 19, border: "none", cursor: "pointer",
+                background: "rgba(255,255,255,0.16)", backdropFilter: "blur(8px)",
+                color: "white", fontSize: 12.5, fontWeight: 600,
+              }}
+            >
+              {escala.toFixed(1)}× · ajustar
+            </button>
+          )}
+
+          {varias && !ampliada && (
             <>
               <Flecha lado="izq" onClick={() => ir(-1)} />
               <Flecha lado="der" onClick={() => ir(1)} />
@@ -129,6 +285,7 @@ export function Visor({ fotos, indice, onCerrar }: {
               <div style={{
                 position: "absolute", bottom: "calc(18px + env(safe-area-inset-bottom))",
                 left: 0, right: 0, display: "flex", justifyContent: "center", gap: 6,
+                pointerEvents: "none",
               }}>
                 {fotos.map((f, i) => (
                   <span key={f} style={{
