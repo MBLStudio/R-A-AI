@@ -61,6 +61,37 @@ async function encoger(file: File): Promise<File> {
   }
 }
 
+/**
+ * Cuándo se hizo la foto.
+ *
+ * El iPhone borra de la foto el sitio donde se tomó, pero deja la fecha.
+ * Sirve para saber si lo que se está subiendo es de ahora o de hace días,
+ * que es la diferencia entre poner bien un momento en el mapa o mandarlo
+ * a doce kilómetros de donde fue.
+ *
+ * Se lee del principio del archivo sin descomprimir nada: la fecha va en
+ * texto plano dentro de los datos de la cámara.
+ */
+export async function fechaDeLaFoto(file: File): Promise<Date | null> {
+  try {
+    const trozo = await file.slice(0, 128 * 1024).arrayBuffer();
+    const texto = new TextDecoder("latin1").decode(trozo);
+    const m = texto.match(/(20\d\d):(\d\d):(\d\d) (\d\d):(\d\d):(\d\d)/);
+    if (!m) return null;
+
+    const fecha = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+    if (Number.isNaN(fecha.getTime())) return null;
+
+    // Una fecha absurda es un falso positivo del texto
+    const ahora = Date.now();
+    if (fecha.getTime() > ahora + 86_400_000) return null;
+    if (fecha.getFullYear() < 2015) return null;
+    return fecha;
+  } catch {
+    return null;
+  }
+}
+
 export interface ResultadoSubida {
   url: string | null;
   error: string | null;

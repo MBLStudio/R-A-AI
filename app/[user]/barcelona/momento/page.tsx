@@ -10,7 +10,7 @@ import {
 } from "@/lib/barcelona/types";
 import { getEtapaActiva, getBarrios, getContactos, addMomento, hoyISO } from "@/lib/barcelona/queries";
 import { avisar } from "@/lib/barcelona/avisar";
-import { subirFoto as subirAlServidor } from "@/lib/upload";
+import { subirFoto as subirAlServidor, fechaDeLaFoto } from "@/lib/upload";
 import { Pantalla, Campo, estiloInput, Boton } from "@/components/barcelona/Shell";
 
 /** Atajos para no teclear. No es una lista cerrada: se puede escribir lo que sea. */
@@ -50,9 +50,32 @@ export default function MomentoPage() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [ubicando, setUbicando] = useState(false);
   const [avisoUbicacion, setAvisoUbicacion] = useState<string | null>(null);
+  /** Cuándo se hizo la foto más antigua que se ha subido. */
+  const [cuandoFueron, setCuandoFueron] = useState<Date | null>(null);
+
+  /** ¿Las fotos se hicieron hace un rato largo? */
+  const fotosDeOtroMomento = (): boolean => {
+    if (!cuandoFueron) return false;
+    return Date.now() - cuandoFueron.getTime() > 2 * 60 * 60 * 1000;
+  };
 
   const ubicar = () => {
     if (ubicando) return;
+
+    if (fotosDeOtroMomento()) {
+      const cuando = cuandoFueron!.toLocaleString("es-ES", {
+        day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+      });
+      const seguir = confirm(
+        `Las fotos son del ${cuando}.
+
+` +
+        "Si las estáis subiendo desde otro sitio, esto guardará dónde estáis " +
+        "ahora, no dónde fue. ¿Seguimos igual?"
+      );
+      if (!seguir) return;
+    }
+
     if (!navigator.geolocation) {
       setAvisoUbicacion("Este móvil no sabe decirnos dónde está.");
       return;
@@ -147,11 +170,24 @@ export default function MomentoPage() {
     const urls: string[] = [];
     let fallidas = 0;
     let motivo: string | null = null;
+    let masAntigua: Date | null = null;
 
     for (const f of files) {
+      // La fecha hay que leerla antes de subir: al encogerla se pierde
+      const cuando = await fechaDeLaFoto(f);
+      if (cuando && (!masAntigua || cuando < masAntigua)) masAntigua = cuando;
+
       const r = await subirAlServidor(f, "barcelona");
       if (r.url) urls.push(r.url);
       else { fallidas++; motivo = r.error; }
+    }
+
+    // Si las fotos son de otro día, la fecha del momento es la de ellas.
+    // Es más fiable que la de hoy: nadie sube las fotos en el momento.
+    if (masAntigua) {
+      setCuandoFueron(masAntigua);
+      const suDia = `${masAntigua.getFullYear()}-${String(masAntigua.getMonth() + 1).padStart(2, "0")}-${String(masAntigua.getDate()).padStart(2, "0")}`;
+      if (vivido && suDia !== fecha) setFecha(suDia);
     }
 
     setFotos((prev) => [...prev, ...urls]);
