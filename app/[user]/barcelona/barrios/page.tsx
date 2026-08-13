@@ -6,8 +6,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, EJES, type Barrio, type Etapa, type Valoracion, type EjeKey } from "@/lib/barcelona/types";
 import { rankear, fraseCompat, LECTURA, colorCompat, type Compatibilidad } from "@/lib/barcelona/compat";
-import { getEtapaActiva, getBarrios, getValoraciones, upsertValoracion, updateBarrio } from "@/lib/barcelona/queries";
-import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton } from "@/components/barcelona/Shell";
+import { getEtapaActiva, getBarrios, getValoraciones, upsertValoracion, updateBarrio, addBarrio } from "@/lib/barcelona/queries";
+import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
 
 export default function BarriosPage() {
   const params = useParams();
@@ -16,6 +16,7 @@ export default function BarriosPage() {
 
   const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [barrios, setBarrios] = useState<Barrio[]>([]);
+  const [anadiendo, setAnadiendo] = useState(false);
   const [valoraciones, setValoraciones] = useState<Valoracion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [expandido, setExpandido] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export default function BarriosPage() {
     <Pantalla
       titulo="Barrios"
       subtitulo={valorados.length > 0 ? `${valorados.length} de ${barrios.length} valorados` : "Posibilidades de vida"}
+      accion={{ icon: IconoMas, label: "Añadir un sitio", onClick: () => setAnadiendo(true) }}
       color={BCN.sol}
     >
       {cargando ? (
@@ -94,7 +96,117 @@ export default function BarriosPage() {
         onCerrar={() => setValorando(null)}
         onGuardado={async () => { setValorando(null); await cargar(); }}
       />
+      <HojaNuevoBarrio
+        abierta={anadiendo}
+        etapaId={etapa?.id ?? null}
+        onCerrar={() => setAnadiendo(false)}
+        onGuardado={async () => { setAnadiendo(false); await cargar(); }}
+      />
     </Pantalla>
+  );
+}
+
+/* ─── Un sitio nuevo ───────────────────────────────────────────
+   No solo barrios: un pueblo del Maresme, una zona que os han
+   recomendado, lo que sea que estéis mirando para vivir.
+   ─────────────────────────────────────────────────────────── */
+
+function HojaNuevoBarrio({ abierta, etapaId, onCerrar, onGuardado }: {
+  abierta: boolean; etapaId: string | null; onCerrar: () => void; onGuardado: () => void;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [ubicando, setUbicando] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!abierta) return;
+    setNombre(""); setDescripcion("");
+    setCoords(null); setAviso(null);
+  }, [abierta]);
+
+  /** Buscar el sitio por su nombre, para que caiga en el mapa. */
+  const situar = async () => {
+    if (!nombre.trim() || ubicando) return;
+    setUbicando(true);
+    setAviso(null);
+    try {
+      const res = await fetch(`/api/barcelona/situar?q=${encodeURIComponent(nombre.trim())}`);
+      const d = await res.json();
+      if (d.lat && d.lng) {
+        setCoords({ lat: d.lat, lng: d.lng });
+        setAviso(d.nombre ? `Encontrado: ${d.nombre}` : "Situado en el mapa");
+        if (!descripcion.trim() && d.zona) setDescripcion(d.zona);
+      } else {
+        setAviso("No lo hemos encontrado. Se guarda igual, pero no saldrá en el mapa.");
+      }
+    } catch {
+      setAviso("No hemos podido buscarlo ahora mismo.");
+    } finally {
+      setUbicando(false);
+    }
+  };
+
+  const guardar = async () => {
+    if (!nombre.trim() || !etapaId || guardando) return;
+    setGuardando(true);
+    await addBarrio(etapaId, {
+      nombre: nombre.trim(),
+      descripcion: descripcion.trim() || null,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
+    });
+    setGuardando(false);
+    onGuardado();
+  };
+
+  return (
+    <Hoja abierta={abierta} onCerrar={onCerrar} titulo="Añadir un sitio">
+      <p style={{ fontSize: 13, color: BCN.humo, margin: "-10px 0 16px", lineHeight: 1.55 }}>
+        Un barrio, un pueblo, una zona. Lo que estéis mirando para vivir,
+        aunque no sea Barcelona.
+      </p>
+
+      <Campo label="Nombre">
+        <input
+          value={nombre}
+          onChange={(e) => { setNombre(e.target.value); setCoords(null); }}
+          placeholder="Vilassar de Mar"
+          style={estiloInput}
+        />
+        <button
+          onClick={situar}
+          disabled={!nombre.trim() || ubicando}
+          style={{
+            width: "100%", marginTop: 8, padding: "11px", borderRadius: 12,
+            cursor: nombre.trim() && !ubicando ? "pointer" : "default",
+            border: `1.5px solid ${coords ? BCN.oliva : BCN.arenaOsc}`,
+            background: coords ? `${BCN.oliva}12` : "white",
+            color: coords ? BCN.oliva : BCN.mar,
+            fontSize: 13.5, fontWeight: 600,
+          }}
+        >
+          {ubicando ? "Buscando…" : coords ? "✓ Situado en el mapa" : "📍 Buscarlo en el mapa"}
+        </button>
+        {aviso && (
+          <p style={{ fontSize: 12.5, color: coords ? BCN.oliva : BCN.humo, margin: "7px 0 0", lineHeight: 1.5 }}>
+            {aviso}
+          </p>
+        )}
+      </Campo>
+
+      <Campo label="¿Por qué lo miráis?">
+        <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={3}
+          placeholder="Opcional. Lo que os han contado, por qué os llama…"
+          style={{ ...estiloInput, resize: "vertical", lineHeight: 1.5 }} />
+      </Campo>
+
+      <Boton onClick={guardar} disabled={!nombre.trim() || guardando} color={BCN.sol}>
+        {guardando ? "Guardando…" : "Añadir"}
+      </Boton>
+    </Hoja>
   );
 }
 

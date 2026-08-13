@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import {
-  BCN, TIPO_MOMENTO, pintarMomento, TIPOS_EXPERIENCIA,
+  BCN, TIPO_MOMENTO, pintarMomento,
   type Momento, type TipoMomento, type Barrio, type Autor, type Contacto,
 } from "@/lib/barcelona/types";
 import { updateMomento, deleteMomento, formatFechaLarga, nombreDia } from "@/lib/barcelona/queries";

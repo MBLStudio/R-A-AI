@@ -38,7 +38,6 @@ const SECCIONES: { titulo: string; filas: Fila[] }[] = [
     titulo: "Decidir",
     filas: [
       { id: "barrios",  titulo: "Barrios",  sub: "Valorados por los dos",     icon: "🌆", color: BCN.sol },
-      { id: "buscar",   titulo: "Buscar",   sub: "Los nueve portales, filtrados", icon: "🔍", color: BCN.mar },
       { id: "vivienda", titulo: "Vivienda", sub: "Cada piso, una decisión",   icon: "🏠", color: BCN.tejaOsc },
       { id: "gastos",   titulo: "Gastos",   sub: "El bote y quién pone qué",  icon: "💶", color: BCN.oliva },
     ],
@@ -46,7 +45,6 @@ const SECCIONES: { titulo: string; filas: Fila[] }[] = [
   {
     titulo: "Recordar",
     filas: [
-      { id: "experiencias", titulo: "Experiencias", sub: "Los sitios que os marcaron", icon: "🍽️", color: BCN.oliva },
       { id: "mapa",         titulo: "Mapa",         sub: "Vuestra Barcelona sobre el plano", icon: "🗺️", color: BCN.marClaro },
       { id: "contactos",    titulo: "Contactos",    sub: "Quién os ayudó",             icon: "📇", color: BCN.humo },
     ],

@@ -218,10 +218,6 @@ export function pintarMomento(tipo: string, titulo = ""): { label: string; icon:
   return { label: tipo || "Momento", icon: "✨", color: BCN.humo };
 }
 
-/** Tipos que además cuentan como "experiencia" (tienen lugar y recuerdo). */
-export const TIPOS_EXPERIENCIA: TipoMomento[] = [
-  "restaurante", "rooftop", "playa", "excursion", "explorar",
-];
 
 export const ESTADO_PISO: Record<EstadoPiso, { label: string; icon: string; color: string }> = {
   nuevo:      { label: "Nuevo",      icon: "🆕", color: BCN.humo },
