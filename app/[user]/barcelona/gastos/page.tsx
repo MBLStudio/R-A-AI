@@ -186,7 +186,7 @@ export default function GastosPage() {
             ))}
           </div>
 
-          {vista === "movimientos" && meses.length > 1 && (
+          {vista === "movimientos" && (
             <div style={{
               display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4, marginBottom: 12,
             }}>

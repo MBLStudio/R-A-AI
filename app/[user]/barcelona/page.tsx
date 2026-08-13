@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, TIPO_MOMENTO, pintarMomento } from "@/lib/barcelona/types";
-import type { Etapa, Barrio, Momento, Piso, Valoracion, Contacto } from "@/lib/barcelona/types";
+import type { Etapa, Barrio, Momento, Valoracion, Contacto } from "@/lib/barcelona/types";
 import { rankear } from "@/lib/barcelona/compat";
 import {
   getEtapaActiva, getSnapshot, diasEnCiudad, formatFechaCorta, nombreDia, hoyISO,
@@ -59,12 +59,13 @@ export default function BarcelonaPage() {
   const [etapa, setEtapa] = useState<Etapa | null>(null);
   const [barrios, setBarrios] = useState<Barrio[]>([]);
   const [momentos, setMomentos] = useState<Momento[]>([]);
-  const [pisos, setPisos] = useState<Piso[]>([]);
   const [valoraciones, setValoraciones] = useState<Valoracion[]>([]);
   const [contactos, setContactos] = useState<Contacto[]>([]);
   const [cargando, setCargando] = useState(true);
   const [sinEtapa, setSinEtapa] = useState(false);
   const [eligiendoFoto, setEligiendoFoto] = useState(false);
+  // Cambia cuando se toca la foto de cabecera, para que se vuelva a leer
+  const [versionFoto, setVersionFoto] = useState(0);
 
   useEffect(() => {
     if (user && user !== activeUser) setUser(user, user);
@@ -77,7 +78,6 @@ export default function BarcelonaPage() {
     setEtapa(snap.etapa);
     setBarrios(snap.barrios);
     setMomentos(snap.momentos);
-    setPisos(snap.pisos);
     setValoraciones(snap.valoraciones);
     setContactos(snap.contactos);
     setCargando(false);
@@ -103,6 +103,8 @@ export default function BarcelonaPage() {
 
         <Cabecera
           etapa={etapa}
+          etapaId={etapa?.id ?? null}
+          versionFoto={versionFoto}
           dias={dias}
           onBack={() => router.push(`/${user}`)}
           onAjustes={() => ir("ajustes")}
@@ -128,7 +130,6 @@ export default function BarcelonaPage() {
                 <Pulso
                   momentos={vividos.length}
                   barrios={ranking.filter((r) => r.compat.porcentaje !== null).length}
-                  pisos={pisos.length}
                   contactos={contactos.length}
                   mejorBarrio={mejorBarrio?.entidad.nombre ?? null}
                   mejorPct={mejorBarrio?.compat.porcentaje ?? null}
@@ -164,22 +165,27 @@ export default function BarcelonaPage() {
       {/* El asistente vive flotando en la esquina */}
       {!sinEtapa && <Asistente etapa={etapa} usuario={user} />}
 
-      <HojaFondos abierta={eligiendoFoto} onCerrar={() => setEligiendoFoto(false)} />
+      <HojaFondos
+        abierta={eligiendoFoto}
+        etapaId={etapa?.id ?? null}
+        onCerrar={() => setEligiendoFoto(false)}
+        onCambio={() => setVersionFoto((n) => n + 1)}
+      />
     </div>
   );
 }
 
 /* ─── Cabecera ─────────────────────────────────────────────── */
 
-function Cabecera({ etapa, dias, onBack, onAjustes, onFoto }: {
-  etapa: Etapa | null; dias: number | null;
+function Cabecera({ etapa, etapaId, versionFoto, dias, onBack, onAjustes, onFoto }: {
+  etapa: Etapa | null; etapaId: string | null; versionFoto: number; dias: number | null;
   onBack: () => void; onAjustes: () => void; onFoto: () => void;
 }) {
   const titulo = etapa?.subtitulo ?? "Catalanes por una temporada";
 
   return (
     <div style={{ position: "relative", overflow: "hidden", marginBottom: 20 }}>
-      <Fondo onGestionar={onFoto} />
+      <Fondo key={versionFoto} etapaId={etapaId} onGestionar={onFoto} />
 
       {/* Velo para que el texto se lea sobre cualquier foto */}
       <div style={{
@@ -292,14 +298,13 @@ function Proximo({ momento, onClick }: { momento: Momento; onClick: () => void }
 
 /* ─── Pulso ────────────────────────────────────────────────── */
 
-function Pulso({ momentos, barrios, pisos, contactos, mejorBarrio, mejorPct, onBarrios }: {
-  momentos: number; barrios: number; pisos: number; contactos: number;
+function Pulso({ momentos, barrios, contactos, mejorBarrio, mejorPct, onBarrios }: {
+  momentos: number; barrios: number; contactos: number;
   mejorBarrio: string | null; mejorPct: number | null; onBarrios: () => void;
 }) {
   const datos = [
     { n: momentos,  label: momentos === 1 ? "momento" : "momentos" },
     { n: barrios,   label: barrios === 1 ? "barrio" : "barrios" },
-    { n: pisos,     label: pisos === 1 ? "piso" : "pisos" },
     { n: contactos, label: contactos === 1 ? "contacto" : "contactos" },
   ];
 

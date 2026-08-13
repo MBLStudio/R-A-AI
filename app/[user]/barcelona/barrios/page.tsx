@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, EJES, type Barrio, type Etapa, type Valoracion, type EjeKey } from "@/lib/barcelona/types";
 import { rankear, fraseCompat, LECTURA, colorCompat, type Compatibilidad } from "@/lib/barcelona/compat";
-import { getEtapaActiva, getBarrios, getValoraciones, upsertValoracion, updateBarrio, addBarrio } from "@/lib/barcelona/queries";
+import { getEtapaActiva, getBarrios, getValoraciones, upsertValoracion, updateBarrio, addBarrio, deleteBarrio } from "@/lib/barcelona/queries";
 import { avisar } from "@/lib/barcelona/avisar";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
 
@@ -96,6 +96,7 @@ export default function BarriosPage() {
         valoracionActual={valoraciones.find((v) => v.entidad_id === valorando?.id && v.usuario === user) ?? null}
         onCerrar={() => setValorando(null)}
         onGuardado={async () => { setValorando(null); await cargar(); }}
+        onBorrado={async () => { setValorando(null); await cargar(); }}
       />
       <HojaNuevoBarrio
         abierta={anadiendo}
@@ -371,10 +372,10 @@ function Medidor({ porcentaje, color }: { porcentaje: number; color: string }) {
 
 /* ─── Hoja de valoración ───────────────────────────────────── */
 
-function HojaValorar({ barrio, etapaId, usuario, valoracionActual, onCerrar, onGuardado }: {
+function HojaValorar({ barrio, etapaId, usuario, valoracionActual, onCerrar, onGuardado, onBorrado }: {
   barrio: Barrio | null; etapaId: string | null; usuario: UserName;
   valoracionActual: Valoracion | null;
-  onCerrar: () => void; onGuardado: () => void;
+  onCerrar: () => void; onGuardado: () => void; onBorrado: () => void;
 }) {
   const [valores, setValores] = useState<Record<EjeKey, number>>({
     transporte: 5, ambiente: 5, precio: 5, sensacion: 5,
@@ -438,6 +439,24 @@ function HojaValorar({ barrio, etapaId, usuario, valoracionActual, onCerrar, onG
       <Boton onClick={guardar} disabled={guardando} color={color}>
         {guardando ? "Guardando…" : "Guardar valoración"}
       </Boton>
+
+      <button
+        onClick={async () => {
+          if (!barrio) return;
+          if (!confirm(`¿Quitar ${barrio.nombre} de la lista?
+
+Se irán también vuestras valoraciones de este sitio.`)) return;
+          await deleteBarrio(barrio.id);
+          onBorrado();
+        }}
+        style={{
+          width: "100%", marginTop: 10, padding: "12px", borderRadius: 12,
+          border: "none", background: "transparent", color: BCN.teja,
+          fontSize: 13.5, cursor: "pointer",
+        }}
+      >
+        Quitar este sitio
+      </button>
     </Hoja>
   );
 }

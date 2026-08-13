@@ -46,6 +46,19 @@ export async function addBarrio(etapaId: string, barrio: Partial<Barrio>): Promi
   return (data as Barrio) ?? null;
 }
 
+/**
+ * Quitar un sitio de la lista.
+ *
+ * Sus valoraciones se van con él. Los momentos y pisos que lo tuvieran
+ * asignado se quedan, solo pierden el barrio (así lo dice la clave
+ * foránea: ON DELETE SET NULL).
+ */
+export async function deleteBarrio(id: string): Promise<boolean> {
+  await supabase.from("bcn_valoraciones").delete().eq("entidad_tipo", "barrio").eq("entidad_id", id);
+  const { error } = await supabase.from("bcn_barrios").delete().eq("id", id);
+  return !error;
+}
+
 export async function updateBarrio(id: string, cambios: Partial<Barrio>): Promise<boolean> {
   const { error } = await supabase.from("bcn_barrios").update(cambios).eq("id", id);
   return !error;

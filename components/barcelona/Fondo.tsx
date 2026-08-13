@@ -1,27 +1,33 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import { BCN } from "@/lib/barcelona/types";
 import {
-  todosLosFondos, fondoDeHoy, fondoFijado, fijarFondo,
-  guardarFondoPropio, borrarFondoPropio, type Fondo as TFondo,
+  todosLosFondos, fondoDeHoy, leerAjuste, fijarFondo,
+  guardarFondoPropio, borrarFondoPropio,
+  type Fondo as TFondo, type AjusteFondo,
 } from "@/lib/barcelona/fondos";
-import { uploadPhoto } from "@/lib/upload";
+import { subirFoto } from "@/lib/upload";
 import { Hoja, Boton } from "@/components/barcelona/Shell";
 
 /* ═══════════════════════════════════════════════════════════
    La foto de la cabecera.
 
    Cambia sola cada día. Si una os gusta mucho, se fija y se
-   queda. Y podéis subir las vuestras, ajustando el encuadre
-   para que quede justo como queréis.
+   queda. Y podéis subir las vuestras, ajustando el encuadre.
+
+   Lo que se elija lo ven los dos: se guarda con la etapa, no
+   en el móvil de quien lo tocó.
    ═══════════════════════════════════════════════════════════ */
 
-export function Fondo({ onGestionar }: { onGestionar: () => void }) {
+export function Fondo({ etapaId, onGestionar }: { etapaId: string | null; onGestionar: () => void }) {
   const [fondo, setFondo] = useState<TFondo | null>(null);
 
-  useEffect(() => { setFondo(fondoDeHoy()); }, []);
+  useEffect(() => {
+    if (!etapaId) return;
+    leerAjuste(etapaId).then((a) => setFondo(fondoDeHoy(a)));
+  }, [etapaId]);
 
   if (!fondo) {
     return <div style={{ position: "absolute", inset: 0, background: BCN.tejaOsc }} />;
@@ -30,7 +36,7 @@ export function Fondo({ onGestionar }: { onGestionar: () => void }) {
   return (
     <>
       <motion.div
-        key={fondo.id}
+        key={fondo.url}
         initial={{ opacity: 0, scale: 1.06 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1.1, ease: "easeOut" }}
@@ -58,60 +64,78 @@ export function Fondo({ onGestionar }: { onGestionar: () => void }) {
 
 /* ─── Gestión de fotos ─────────────────────────────────────── */
 
-export function HojaFondos({ abierta, onCerrar }: { abierta: boolean; onCerrar: () => void }) {
-  const [fondos, setFondos] = useState<TFondo[]>([]);
-  const [fijado, setFijado] = useState<string | null>(null);
+export function HojaFondos({ abierta, etapaId, onCerrar, onCambio }: {
+  abierta: boolean; etapaId: string | null;
+  onCerrar: () => void;
+  /** Para que la cabecera se entere de que hay foto nueva. */
+  onCambio: () => void;
+}) {
+  const [ajuste, setAjuste] = useState<AjusteFondo>({ fijado: null, posicionFijada: null, propias: [] });
   const [subiendo, setSubiendo] = useState(false);
+  const [fallo, setFallo] = useState<string | null>(null);
   const [ajustando, setAjustando] = useState<{ url: string; y: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const refrescar = () => {
-    setFondos(todosLosFondos());
-    setFijado(fondoFijado());
-  };
+  const refrescar = useCallback(async () => {
+    if (!etapaId) return;
+    setAjuste(await leerAjuste(etapaId));
+  }, [etapaId]);
 
-  useEffect(() => { if (abierta) refrescar(); }, [abierta]);
+  useEffect(() => { if (abierta) refrescar(); }, [abierta, refrescar]);
+
+  const fondos = todosLosFondos(ajuste.propias);
 
   const subir = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setSubiendo(true);
-    const url = await uploadPhoto(file, "barcelona-fondos");
+    setFallo(null);
+    const r = await subirFoto(file, "barcelona-fondos");
     setSubiendo(false);
     if (fileRef.current) fileRef.current.value = "";
-    if (url) setAjustando({ url, y: 50 });
+    if (r.url) setAjustando({ url: r.url, y: 50 });
+    else setFallo(r.error ?? "No hemos podido subir la foto.");
   };
 
-  const confirmarAjuste = () => {
-    if (!ajustando) return;
-    const nuevo = guardarFondoPropio(ajustando.url, `center ${ajustando.y}%`);
-    fijarFondo(nuevo.id);
+  const confirmarAjuste = async () => {
+    if (!ajustando || !etapaId) return;
+    const nuevo = await guardarFondoPropio(etapaId, ajuste.propias, ajustando.url, `center ${ajustando.y}%`);
+    await fijarFondo(etapaId, nuevo.url, nuevo.posicion);
     setAjustando(null);
-    refrescar();
-    window.location.reload();
+    await refrescar();
+    onCambio();
   };
 
-  const alternarFijado = (id: string) => {
-    fijarFondo(fijado === id ? null : id);
-    refrescar();
-    window.location.reload();
+  const alternarFijado = async (f: TFondo) => {
+    if (!etapaId) return;
+    const estaFijada = ajuste.fijado === f.url;
+    await fijarFondo(etapaId, estaFijada ? null : f.url, estaFijada ? null : f.posicion);
+    await refrescar();
+    onCambio();
+  };
+
+  const quitar = async (f: TFondo) => {
+    if (!etapaId) return;
+    await borrarFondoPropio(etapaId, ajuste.propias, f.id);
+    await refrescar();
+    onCambio();
   };
 
   return (
     <>
       <Hoja abierta={abierta && !ajustando} onCerrar={onCerrar} titulo="La foto de la cabecera">
         <p style={{ fontSize: 13.5, color: BCN.humo, margin: "-10px 0 18px", lineHeight: 1.6 }}>
-          {fijado
+          {ajuste.fijado
             ? "Tenéis una foto fijada. Quitad el pin para que vuelvan a rotar solas."
             : "Cambian solas cada día. Pulsad el pin de una para que se quede fija."}
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9 }}>
           {fondos.map((f) => {
-            const activo = fijado === f.id;
+            const activo = ajuste.fijado === f.url;
             return (
               <div key={f.id} style={{ position: "relative" }}>
-                <button onClick={() => alternarFijado(f.id)}
+                <button onClick={() => alternarFijado(f)}
                   style={{
                     width: "100%", aspectRatio: "4/3", borderRadius: 13, overflow: "hidden",
                     border: activo ? `2.5px solid ${BCN.sol}` : `1px solid ${BCN.arenaOsc}`,
@@ -142,8 +166,7 @@ export function HojaFondos({ abierta, onCerrar }: { abierta: boolean; onCerrar: 
                 </button>
 
                 {f.propia && (
-                  <button onClick={() => { borrarFondoPropio(f.id); refrescar(); }}
-                    aria-label="Borrar foto"
+                  <button onClick={() => quitar(f)} aria-label="Borrar foto"
                     style={{
                       position: "absolute", top: 6, left: 6, width: 24, height: 24,
                       borderRadius: "50%", background: "rgba(0,0,0,0.5)", border: "none",
@@ -166,11 +189,15 @@ export function HojaFondos({ abierta, onCerrar }: { abierta: boolean; onCerrar: 
           {subiendo ? "Subiendo…" : "＋ Añadir una foto vuestra"}
         </button>
 
+        {fallo && (
+          <p style={{ fontSize: 12.5, color: BCN.teja, margin: "8px 0 0", lineHeight: 1.5 }}>{fallo}</p>
+        )}
+
         <input ref={fileRef} type="file" accept="image/*" onChange={subir}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }} />
 
         <p style={{ fontSize: 11, color: BCN.humo, margin: "14px 0 0", textAlign: "center", lineHeight: 1.55, opacity: 0.75 }}>
-          Fotos de Wikimedia Commons (CC BY-SA), alojadas en la app.
+          Lo que elijáis lo veis los dos. Las de serie son de Wikimedia Commons (CC BY-SA).
         </p>
       </Hoja>
 

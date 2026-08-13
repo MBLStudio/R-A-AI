@@ -10,14 +10,7 @@ import { rankear, colorCompat } from "@/lib/barcelona/compat";
 import { getEtapaActiva, getBarrios, getHistoria, getPisos, getValoraciones, formatFechaLarga } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio } from "@/components/barcelona/Shell";
 
-/* Proyección de Barcelona sobre un lienzo de 100×100.
-   Ajustada al recuadro que cubre del Besòs a Sarrià. */
-const OESTE = 2.108, ESTE = 2.225, NORTE = 41.442, SUR = 41.360;
-const px = (lng: number) => ((lng - OESTE) / (ESTE - OESTE)) * 100;
-const py = (lat: number) => ((NORTE - lat) / (NORTE - SUR)) * 100;
-
 type Capa = "barrios" | "pisos" | "recuerdos" | "lugares";
-type Vista = "ilustrado" | "real";
 
 const CAPAS: { id: Capa; label: string; icon: string; color: string }[] = [
   { id: "barrios",   label: "Barrios",   icon: "🌆", color: BCN.sol },
@@ -53,7 +46,6 @@ export default function MapaPage() {
   const [cargando, setCargando] = useState(true);
   const [activas, setActivas] = useState<Capa[]>(["barrios", "recuerdos", "pisos", "lugares"]);
   const [seleccion, setSeleccion] = useState<Punto | null>(null);
-  const [vista, setVista] = useState<Vista>("ilustrado");
 
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
 
@@ -118,31 +110,13 @@ export default function MapaPage() {
     setActivas((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
 
   return (
-    <Pantalla titulo="Mapa emocional" subtitulo="Vuestra Barcelona sobre el plano" color={BCN.marClaro}>
+    <Pantalla titulo="Mapa" subtitulo="Vuestra Barcelona sobre el plano" color={BCN.marClaro}>
       {cargando ? (
         <div style={{ height: 380, borderRadius: 20, background: BCN.arenaOsc, opacity: 0.6 }} />
       ) : conCoordenadas.length === 0 ? (
         <Vacio icon="🗺️" titulo="Sin mapa" texto="Ejecuta el SQL de Barcelona para cargar los barrios con sus coordenadas." />
       ) : (
         <>
-          {/* Ilustrado / Real */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 12, padding: 4, background: "white", borderRadius: 14, border: `1px solid ${BCN.arenaOsc}` }}>
-            {([
-              { v: "ilustrado" as const, label: "Nuestro mapa", icon: "🎨" },
-              { v: "real" as const,      label: "Mapa real",    icon: "🛰️" },
-            ]).map((o) => (
-              <button key={o.v} onClick={() => { setVista(o.v); setSeleccion(null); }}
-                style={{
-                  flex: 1, padding: "9px", borderRadius: 11, border: "none", cursor: "pointer",
-                  background: vista === o.v ? BCN.marClaro : "transparent",
-                  color: vista === o.v ? "white" : BCN.humo,
-                  fontSize: 13, fontWeight: vista === o.v ? 700 : 500, transition: "all 0.15s",
-                }}>
-                {o.icon} {o.label}
-              </button>
-            ))}
-          </div>
-
           {/* Capas */}
           <div style={{ display: "flex", gap: 7, marginBottom: 14, overflowX: "auto", paddingBottom: 3 }}>
             {CAPAS.map((c) => {
@@ -165,12 +139,10 @@ export default function MapaPage() {
           {/* Lienzo */}
           <div style={{
             position: "relative", borderRadius: 22, overflow: "hidden",
-            background: `linear-gradient(165deg, ${BCN.arena} 0%, #EFE7DA 62%, ${BCN.marClaro}30 100%)`,
             border: `1px solid ${BCN.arenaOsc}`, aspectRatio: "1 / 1",
             boxShadow: "0 6px 24px rgba(44,36,32,0.08)",
           }}>
-            {vista === "real" ? (
-              <MapaReal
+            <MapaReal
                 mostrarBarrios={activas.includes("barrios")}
                 barrios={conCoordenadas.map((b) => ({
                   id: b.id, nombre: b.nombre, lat: b.lat!, lng: b.lng!,
@@ -183,81 +155,6 @@ export default function MapaPage() {
                   icon: p.icon, color: p.color, titulo: p.titulo, detalle: p.detalle,
                 }))}
               />
-            ) : (
-            <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%", display: "block" }}>
-              {/* El mar */}
-              <path d="M100,64 C88,68 76,80 68,100 L100,100 Z" fill={BCN.marClaro} opacity={0.32} />
-              <path d="M100,70 C90,74 80,84 74,100 L100,100 Z" fill={BCN.mar} opacity={0.16} />
-
-              {/* Montjuïc y Collserola, insinuados */}
-              <ellipse cx={22} cy={82} rx={13} ry={7} fill={BCN.oliva} opacity={0.14} />
-              <ellipse cx={26} cy={12} rx={30} ry={9} fill={BCN.oliva} opacity={0.1} />
-
-              {/* Barrios */}
-              {conCoordenadas.map((b, i) => {
-                const compat = compatDe(b.id);
-                const on = activas.includes("barrios");
-                const r = compat === null ? 4.4 : 4.4 + (compat / 100) * 3.4;
-                return (
-                  <g key={b.id} opacity={on ? 1 : 0.18}
-                    style={{ cursor: on ? "pointer" : "default" }}
-                    onClick={() => on && setSeleccion({
-                      id: b.id, lat: b.lat!, lng: b.lng!, icon: "🌆",
-                      color: b.color ?? BCN.teja, capa: "barrios",
-                      titulo: b.nombre,
-                      detalle: compat !== null ? `Compatibilidad ${compat}% · ${b.descripcion ?? ""}` : (b.descripcion ?? "Sin valorar todavía"),
-                    })}>
-                    <motion.circle
-                      cx={px(b.lng!)} cy={py(b.lat!)} r={r}
-                      fill={compat === null ? BCN.arenaOsc : (b.color ?? BCN.teja)}
-                      opacity={compat === null ? 0.5 : 0.28}
-                      initial={{ scale: 0 }} animate={{ scale: 1 }}
-                      transition={{ delay: i * 0.04, type: "spring", stiffness: 200, damping: 16 }}
-                      style={{ transformOrigin: `${px(b.lng!)}px ${py(b.lat!)}px` }}
-                    />
-                    <circle cx={px(b.lng!)} cy={py(b.lat!)} r={1.5}
-                      fill={compat === null ? BCN.humo : colorCompat(compat)} />
-                    <text x={px(b.lng!)} y={py(b.lat!) - r - 1.2}
-                      textAnchor="middle" fontSize={2.7} fill={BCN.tinta}
-                      style={{ fontFamily: "Georgia, serif", pointerEvents: "none" }}>
-                      {b.nombre}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {/* Puntos */}
-              <AnimatePresence>
-                {visibles
-                  .map((p) => ({ p, x: px(p.lng), y: py(p.lat) }))
-                  .filter(({ x, y }) => x > -4 && x < 104 && y > -4 && y < 104)
-                  .map(({ p, x, y }, i) => (
-                    <motion.g key={p.id}
-                      initial={{ opacity: 0, scale: 0 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0 }}
-                      transition={{ delay: Math.min(i * 0.02, 0.5) }}
-                      style={{ cursor: "pointer", transformOrigin: `${x}px ${y}px` }}
-                      onClick={() => setSeleccion(p)}>
-                      <circle cx={x} cy={y} r={2.5} fill="white" stroke={p.color} strokeWidth={0.7} />
-                      <text x={x} y={y + 1.1} textAnchor="middle" fontSize={2.4} style={{ pointerEvents: "none" }}>
-                        {p.icon}
-                      </text>
-                    </motion.g>
-                  ))}
-              </AnimatePresence>
-            </svg>
-            )}
-
-            {/* Rosa de los vientos, solo en el ilustrado */}
-            {vista === "ilustrado" && (
-              <>
-                <p style={{ position: "absolute", bottom: 12, left: 14, fontFamily: "Georgia, serif", fontSize: 10, color: BCN.tinta, margin: 0, letterSpacing: "0.1em", opacity: 0.4 }}>
-                  ↑ N
-                </p>
-                <p style={{ position: "absolute", bottom: 12, right: 16, fontFamily: "Georgia, serif", fontSize: 11, color: BCN.mar, margin: 0, opacity: 0.55, fontStyle: "italic" }}>
-                  el mar
-                </p>
-              </>
-            )}
           </div>
 
           {/* Detalle */}
