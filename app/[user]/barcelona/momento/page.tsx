@@ -96,6 +96,35 @@ export default function MomentoPage() {
     );
   };
 
+  /**
+   * Situar el momento por el nombre del sitio.
+   *
+   * Hace falta porque las fotos se suben cuando se suben: unas fotos de
+   * Terrassa se pueden estar subiendo desde el tren, y coger la ubicación
+   * de ese momento las deja en el sitio equivocado. Más vale escribir
+   * dónde fue que adivinarlo.
+   */
+  const buscarSitio = async () => {
+    const texto = lugar.trim();
+    if (!texto || ubicando) return;
+    setUbicando(true);
+    setAvisoUbicacion(null);
+    try {
+      const res = await fetch(`/api/barcelona/situar?q=${encodeURIComponent(texto)}`);
+      const d = await res.json();
+      if (d.lat && d.lng) {
+        setCoords({ lat: d.lat, lng: d.lng });
+        setAvisoUbicacion(`Situado en ${d.nombre ?? texto}${d.zona ? `, ${d.zona}` : ""}`);
+      } else {
+        setAvisoUbicacion(`No hemos encontrado «${texto}». Probad con el nombre del pueblo o del barrio.`);
+      }
+    } catch {
+      setAvisoUbicacion("No hemos podido buscarlo ahora mismo.");
+    } finally {
+      setUbicando(false);
+    }
+  };
+
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
 
   useEffect(() => {
@@ -126,12 +155,6 @@ export default function MomentoPage() {
     }
 
     setFotos((prev) => [...prev, ...urls]);
-
-    // Si subís fotos es que estáis donde las hicisteis, así que
-    // aprovechamos para coger la ubicación sin tener que pedirla.
-    // iOS borra el sitio de dentro de la foto, y esta es la única
-    // manera de que el mapa se llene solo.
-    if (urls.length > 0 && !coords && vivido) ubicar();
 
     // Si alguna se queda por el camino, hay que decirlo: antes fallaba en
     // silencio y parecía que la app se había quedado colgada.
@@ -296,9 +319,57 @@ export default function MomentoPage() {
           style={{ ...estiloInput, resize: "vertical", lineHeight: 1.5 }} />
       </Campo>
 
-      <Campo label="Lugar">
-        <input value={lugar} onChange={(e) => setLugar(e.target.value)}
-          placeholder="Plaça del Sol, Bar Ramón…" style={estiloInput} />
+      <Campo label="¿Dónde fue?">
+        <input value={lugar} onChange={(e) => { setLugar(e.target.value); setCoords(null); }}
+          placeholder="Terrassa, Plaça del Sol, Bar Ramón…" style={estiloInput} />
+
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={ubicar}
+            disabled={ubicando}
+            style={{
+              flex: 1, padding: "11px 10px", borderRadius: 12,
+              cursor: ubicando ? "default" : "pointer",
+              border: `1.5px solid ${coords ? BCN.oliva : BCN.arenaOsc}`,
+              background: coords ? `${BCN.oliva}12` : "white",
+              color: coords ? BCN.oliva : BCN.mar,
+              fontSize: 13.5, fontWeight: 600,
+            }}
+          >
+            {ubicando ? "🛰️ Buscando…" : coords ? "✓ Situado" : "📍 Estamos aquí"}
+          </button>
+
+          <button
+            type="button"
+            onClick={buscarSitio}
+            disabled={!lugar.trim() || ubicando}
+            style={{
+              flex: 1, padding: "11px 10px", borderRadius: 12,
+              cursor: lugar.trim() && !ubicando ? "pointer" : "default",
+              border: `1.5px solid ${BCN.arenaOsc}`,
+              background: "white",
+              color: lugar.trim() ? BCN.mar : BCN.humo,
+              fontSize: 13.5, fontWeight: 600,
+            }}
+          >
+            🔎 Fue en…
+          </button>
+        </div>
+
+        <p style={{ fontSize: 11.5, color: BCN.humo, margin: "7px 0 0", lineHeight: 1.5 }}>
+          «Estamos aquí» si lo apuntáis en el sitio. Si lo apuntáis después,
+          escribid arriba dónde fue y buscadlo.
+        </p>
+
+        {avisoUbicacion && (
+          <p style={{
+            fontSize: 12.5, lineHeight: 1.5, margin: "7px 0 0",
+            color: coords ? BCN.oliva : BCN.humo,
+          }}>
+            {avisoUbicacion}
+          </p>
+        )}
       </Campo>
 
       {barrios.length > 0 && (
@@ -308,32 +379,6 @@ export default function MomentoPage() {
             {barrios.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}
           </select>
 
-          <button
-            type="button"
-            onClick={ubicar}
-            disabled={ubicando}
-            style={{
-              width: "100%", marginTop: 8, padding: "11px 14px", borderRadius: 12,
-              cursor: ubicando ? "default" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              border: `1.5px solid ${coords ? BCN.oliva : BCN.arenaOsc}`,
-              background: coords ? `${BCN.oliva}12` : "white",
-              color: coords ? BCN.oliva : BCN.mar,
-              fontSize: 14, fontWeight: 600,
-            }}
-          >
-            <span style={{ fontSize: 15 }}>{ubicando ? "🛰️" : coords ? "✓" : "📍"}</span>
-            {ubicando ? "Mirando dónde estáis…" : coords ? "Ubicación guardada" : "Estamos aquí"}
-          </button>
-
-          {avisoUbicacion && (
-            <p style={{
-              fontSize: 12.5, lineHeight: 1.5, margin: "7px 0 0",
-              color: coords ? BCN.oliva : BCN.humo,
-            }}>
-              {avisoUbicacion}
-            </p>
-          )}
         </Campo>
       )}
 
