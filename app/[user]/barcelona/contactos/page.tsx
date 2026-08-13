@@ -13,6 +13,7 @@ import {
   getMomentosPorContacto, getPisosPorContacto,
 } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
+import { avisar } from "@/lib/barcelona/avisar";
 
 /* ═══════════════════════════════════════════════════════════
    Contactos.
@@ -175,6 +176,7 @@ export default function ContactosPage() {
         abierta={editando !== null}
         contacto={editando === "nuevo" ? null : editando}
         etapaId={etapa?.id ?? null}
+        usuario={user}
         onCerrar={() => setEditando(null)}
         onGuardado={async () => { setEditando(null); await cargar(); }}
         onBorrado={async () => { setEditando(null); setAbierto(null); await cargar(); }}
@@ -385,8 +387,8 @@ function Dato({ icono, href, children }: { icono: string; href: string; children
 
 /* ─── Alta y edición ───────────────────────────────────────── */
 
-function HojaContacto({ abierta, contacto, etapaId, onCerrar, onGuardado, onBorrado }: {
-  abierta: boolean; contacto: Contacto | null; etapaId: string | null;
+function HojaContacto({ abierta, contacto, etapaId, usuario, onCerrar, onGuardado, onBorrado }: {
+  abierta: boolean; contacto: Contacto | null; etapaId: string | null; usuario: string;
   onCerrar: () => void; onGuardado: () => void; onBorrado: () => void;
 }) {
   const [nombre, setNombre] = useState("");
@@ -422,7 +424,10 @@ function HojaContacto({ abierta, contacto, etapaId, onCerrar, onGuardado, onBorr
       favorito,
     };
     if (contacto) await updateContacto(contacto.id, campos);
-    else if (etapaId) await addContacto(etapaId, campos);
+    else if (etapaId) {
+      await addContacto(etapaId, campos);
+      avisar(usuario, "contacto", campos.nombre);
+    }
     setGuardando(false);
     onGuardado();
   };

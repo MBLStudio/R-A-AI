@@ -14,6 +14,7 @@ import {
   type Bote, type Gasto, type GastoFijo, type FormaPago, type Medio,
 } from "@/lib/barcelona/gastos";
 import { getEtapaActiva, hoyISO } from "@/lib/barcelona/queries";
+import { avisar } from "@/lib/barcelona/avisar";
 import { uploadPhoto } from "@/lib/upload";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
@@ -275,6 +276,7 @@ export default function GastosPage() {
         gasto={anotando === "nuevo" ? null : anotando}
         etapaId={etapa?.id ?? null}
         botes={botes}
+        usuario={user}
         recargar={boteParaRecargar}
         onCerrar={() => { setAnotando(null); setBoteParaRecargar(null); }}
         onGuardado={async () => { setAnotando(null); setBoteParaRecargar(null); await cargar(); }}
@@ -497,8 +499,9 @@ function FilaFijo({ fijo, botes, onEditar }: { fijo: GastoFijo; botes: Bote[]; o
 
 /* ─── Anotar un gasto ──────────────────────────────────────── */
 
-function HojaGasto({ abierta, gasto, etapaId, botes, recargar, onCerrar, onGuardado }: {
+function HojaGasto({ abierta, gasto, etapaId, botes, usuario, recargar, onCerrar, onGuardado }: {
   abierta: boolean; gasto: Gasto | null; etapaId: string | null; botes: Bote[];
+  usuario: string;
   /** Si se ha entrado tocando un bote, se abre listo para meterle dinero. */
   recargar?: string | null;
   onCerrar: () => void; onGuardado: () => void;
@@ -593,6 +596,13 @@ function HojaGasto({ abierta, gasto, etapaId, botes, recargar, onCerrar, onGuard
           await updateGasto(creado.id, { fijo_id: nuevoFijo.id, fijo_periodo: periodo });
         }
       }
+
+      avisar(
+        usuario,
+        tipo === "aportacion" ? "aportacion" : "gasto",
+        campos.concepto,
+        euros(campos.importe)
+      );
     }
     setGuardando(false);
     onGuardado();

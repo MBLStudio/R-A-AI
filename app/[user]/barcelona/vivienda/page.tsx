@@ -14,6 +14,7 @@ import {
   addPiso, updatePiso, deletePiso, upsertValoracion,
 } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, Selector, IconoMas } from "@/components/barcelona/Shell";
+import { avisar } from "@/lib/barcelona/avisar";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
 
 const ESTADOS: EstadoPiso[] = ["nuevo", "contactado", "visitado", "favorito", "descartado", "elegido"];
@@ -751,6 +752,7 @@ function HojaValorarPiso({ piso, etapaId, usuario, actual, onCerrar, onGuardado 
     if (!piso || !etapaId) return;
     setGuardando(true);
     await upsertValoracion(etapaId, "piso", piso.id, usuario, { ...valores, nota: nota.trim() });
+    avisar(usuario, "valoracion_piso", piso.titulo);
     setGuardando(false);
     onGuardado();
   };

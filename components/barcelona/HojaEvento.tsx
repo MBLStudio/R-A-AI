@@ -8,6 +8,8 @@ import {
 } from "@/lib/barcelona/types";
 import { updateMomento, deleteMomento, formatFechaLarga, nombreDia } from "@/lib/barcelona/queries";
 import { subirFoto } from "@/lib/upload";
+import { avisar } from "@/lib/barcelona/avisar";
+import { useUserStore } from "@/store/userStore";
 import { Hoja, Campo, estiloInput, Selector } from "@/components/barcelona/Shell";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
 
@@ -46,6 +48,7 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
   const visor = useVisor();
   const [autor, setAutor] = useState<Autor>("ambos");
   const [esHito, setEsHito] = useState(false);
+  const { activeUser } = useUserStore();
   const [fotos, setFotos] = useState<string[]>([]);
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const [falloFoto, setFalloFoto] = useState<string | null>(null);
@@ -91,6 +94,11 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
       es_hito: esHito,
       fotos,
     });
+
+    // Solo si se han añadido fotos que antes no estaban
+    if (activeUser && fotos.length > (momento.fotos?.length ?? 0)) {
+      avisar(activeUser, "fotos", momento.titulo);
+    }
     setGuardando(false);
     setEditando(false);
     onCambio();

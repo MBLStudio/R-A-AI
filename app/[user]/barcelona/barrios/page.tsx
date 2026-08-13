@@ -7,6 +7,7 @@ import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, EJES, type Barrio, type Etapa, type Valoracion, type EjeKey } from "@/lib/barcelona/types";
 import { rankear, fraseCompat, LECTURA, colorCompat, type Compatibilidad } from "@/lib/barcelona/compat";
 import { getEtapaActiva, getBarrios, getValoraciones, upsertValoracion, updateBarrio, addBarrio } from "@/lib/barcelona/queries";
+import { avisar } from "@/lib/barcelona/avisar";
 import { Pantalla, Vacio, Hoja, Campo, estiloInput, Boton, IconoMas } from "@/components/barcelona/Shell";
 
 export default function BarriosPage() {
@@ -99,6 +100,7 @@ export default function BarriosPage() {
       <HojaNuevoBarrio
         abierta={anadiendo}
         etapaId={etapa?.id ?? null}
+        usuario={user}
         onCerrar={() => setAnadiendo(false)}
         onGuardado={async () => { setAnadiendo(false); await cargar(); }}
       />
@@ -111,8 +113,9 @@ export default function BarriosPage() {
    recomendado, lo que sea que estéis mirando para vivir.
    ─────────────────────────────────────────────────────────── */
 
-function HojaNuevoBarrio({ abierta, etapaId, onCerrar, onGuardado }: {
-  abierta: boolean; etapaId: string | null; onCerrar: () => void; onGuardado: () => void;
+function HojaNuevoBarrio({ abierta, etapaId, usuario, onCerrar, onGuardado }: {
+  abierta: boolean; etapaId: string | null; usuario: UserName;
+  onCerrar: () => void; onGuardado: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
@@ -158,6 +161,7 @@ function HojaNuevoBarrio({ abierta, etapaId, onCerrar, onGuardado }: {
       lat: coords?.lat ?? null,
       lng: coords?.lng ?? null,
     });
+    avisar(usuario, "barrio", nombre.trim());
     setGuardando(false);
     onGuardado();
   };
@@ -393,6 +397,7 @@ function HojaValorar({ barrio, etapaId, usuario, valoracionActual, onCerrar, onG
     if (!barrio || !etapaId) return;
     setGuardando(true);
     await upsertValoracion(etapaId, "barrio", barrio.id, usuario, { ...valores, nota: nota.trim() });
+    avisar(usuario, "valoracion_barrio", barrio.nombre);
     await updateBarrio(barrio.id, { visitado: true });
     setGuardando(false);
     onGuardado();

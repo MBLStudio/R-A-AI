@@ -9,6 +9,7 @@ import {
   type TipoMomento, type Barrio, type Etapa, type Contacto,
 } from "@/lib/barcelona/types";
 import { getEtapaActiva, getBarrios, getContactos, addMomento, hoyISO } from "@/lib/barcelona/queries";
+import { avisar } from "@/lib/barcelona/avisar";
 import { subirFoto as subirAlServidor } from "@/lib/upload";
 import { Pantalla, Campo, estiloInput, Boton } from "@/components/barcelona/Shell";
 
@@ -125,6 +126,13 @@ export default function MomentoPage() {
     }
 
     setFotos((prev) => [...prev, ...urls]);
+
+    // Si subís fotos es que estáis donde las hicisteis, así que
+    // aprovechamos para coger la ubicación sin tener que pedirla.
+    // iOS borra el sitio de dentro de la foto, y esta es la única
+    // manera de que el mapa se llene solo.
+    if (urls.length > 0 && !coords && vivido) ubicar();
+
     // Si alguna se queda por el camino, hay que decirlo: antes fallaba en
     // silencio y parecía que la app se había quedado colgada.
     if (fallidas > 0) {
@@ -159,6 +167,8 @@ export default function MomentoPage() {
       es_hito: esHito,
       espontaneo: vivido,
     });
+
+    avisar(user, vivido ? "momento" : "plan", titulo.trim(), hora || lugar.trim());
     router.back();
   };
 
