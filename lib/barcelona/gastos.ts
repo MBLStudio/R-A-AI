@@ -16,6 +16,8 @@ import { BCN } from "./types";
 
 export type FormaPago = "bote" | "alejandro" | "rut";
 export type TipoGasto = "gasto" | "aportacion";
+/** Con qué se pagó. Sin más pretensión que tenerlo apuntado. */
+export type Medio = "efectivo" | "tarjeta" | null;
 
 export interface Bote {
   id: string;
@@ -39,6 +41,7 @@ export interface Gasto {
   bote_id: string | null;
   /** Cosa suya, con su dinero: no entra en el reparto. */
   personal: boolean;
+  medio: Medio;
   categoria: string;
   ticket_url: string | null;
   nota: string | null;
@@ -56,6 +59,7 @@ export interface GastoFijo {
   pagado_por: FormaPago;
   bote_id: string | null;
   personal: boolean;
+  medio: Medio;
   categoria: string;
   activo: boolean;
   desde: string;
@@ -212,6 +216,7 @@ export async function apuntarFijosPendientes(
         pagado_por: fijo.pagado_por,
         bote_id: fijo.bote_id,
         personal: fijo.personal,
+        medio: fijo.medio,
         categoria: fijo.categoria,
         fijo_id: fijo.id,
         fijo_periodo: periodo,
@@ -312,6 +317,26 @@ export function porCategoria(gastos: Gasto[]): { clave: string; total: number }[
   return Object.entries(suma)
     .map(([clave, total]) => ({ clave, total }))
     .sort((a, b) => b.total - a.total);
+}
+
+/** Los meses que tienen algo apuntado, del más nuevo al más viejo. */
+export function mesesConMovimiento(gastos: Gasto[]): string[] {
+  const meses = new Set(gastos.map((g) => g.fecha.slice(0, 7)));
+  const ahora = new Date();
+  // El mes en curso siempre está, aunque todavía no haya nada
+  meses.add(`${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`);
+  return [...meses].sort().reverse();
+}
+
+/** Cómo se escribe un mes: «agosto de 2026». */
+export function nombreDelMes(mes: string): string {
+  const [a, m] = mes.split("-").map(Number);
+  const texto = new Date(a, m - 1, 1).toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+export function delMes(gastos: Gasto[], mes: string): Gasto[] {
+  return gastos.filter((g) => g.fecha.startsWith(mes));
 }
 
 /** Lo gastado este mes, para el titular. */

@@ -38,7 +38,6 @@ const SECCIONES: { titulo: string; filas: Fila[] }[] = [
     titulo: "Decidir",
     filas: [
       { id: "barrios",  titulo: "Barrios",  sub: "Valorados por los dos",     icon: "🌆", color: BCN.sol },
-      { id: "vivienda", titulo: "Vivienda", sub: "Cada piso, una decisión",   icon: "🏠", color: BCN.tejaOsc },
       { id: "gastos",   titulo: "Gastos",   sub: "El bote y quién pone qué",  icon: "💶", color: BCN.oliva },
     ],
   },

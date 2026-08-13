@@ -8,9 +8,10 @@ import { BCN, type Etapa } from "@/lib/barcelona/types";
 import {
   getBotes, addBote, getGastos, addGasto, updateGasto, deleteGasto,
   getFijos, addFijo, updateFijo, deleteFijo, apuntarFijosPendientes,
-  saldoDelBote, calcularBalance, porCategoria, gastadoEsteMes,
+  saldoDelBote, calcularBalance, porCategoria,
+  mesesConMovimiento, nombreDelMes, delMes,
   categoria, CATEGORIAS, euros, eurosCorto,
-  type Bote, type Gasto, type GastoFijo, type FormaPago,
+  type Bote, type Gasto, type GastoFijo, type FormaPago, type Medio,
 } from "@/lib/barcelona/gastos";
 import { getEtapaActiva, hoyISO } from "@/lib/barcelona/queries";
 import { uploadPhoto } from "@/lib/upload";
@@ -41,6 +42,11 @@ export default function GastosPage() {
   const [anotando, setAnotando] = useState<Gasto | "nuevo" | null>(null);
   const [editandoFijo, setEditandoFijo] = useState<GastoFijo | "nuevo" | null>(null);
   const [nuevoBote, setNuevoBote] = useState(false);
+  const [boteParaRecargar, setBoteParaRecargar] = useState<string | null>(null);
+  const [mes, setMes] = useState<string>(() => {
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   useEffect(() => { if (user && user !== activeUser) setUser(user, user); }, [user, activeUser, setUser]);
 
@@ -61,23 +67,31 @@ export default function GastosPage() {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const balance = useMemo(() => calcularBalance(gastos), [gastos]);
-  const esteMes = useMemo(() => gastadoEsteMes(gastos), [gastos]);
-  const categorias = useMemo(() => porCategoria(gastos), [gastos]);
+  const meses = useMemo(() => mesesConMovimiento(gastos), [gastos]);
+  const delMesElegido = useMemo(() => delMes(gastos, mes), [gastos, mes]);
+
+  // El saldo del bote es de siempre, no de un mes: el dinero no se
+  // reinicia en enero. El resto sí se mira mes a mes.
+  const balance = useMemo(() => calcularBalance(delMesElegido), [delMesElegido]);
+  const categorias = useMemo(() => porCategoria(delMesElegido), [delMesElegido]);
+  const gastadoEnElMes = useMemo(
+    () => delMesElegido.filter((g) => g.tipo === "gasto" && !g.personal).reduce((t, g) => t + Number(g.importe), 0),
+    [delMesElegido]
+  );
 
   const porDia = useMemo(() => {
     const mapa = new Map<string, Gasto[]>();
-    for (const g of gastos) {
+    for (const g of delMesElegido) {
       if (!mapa.has(g.fecha)) mapa.set(g.fecha, []);
       mapa.get(g.fecha)!.push(g);
     }
     return [...mapa.entries()];
-  }, [gastos]);
+  }, [delMesElegido]);
 
   return (
     <Pantalla
       titulo="Gastos"
-      subtitulo={gastos.length > 0 ? `${eurosCorto(esteMes)} este mes` : "La caja común"}
+      subtitulo={gastos.length > 0 ? `${eurosCorto(gastadoEnElMes)} en ${nombreDelMes(mes).toLowerCase()}` : "La caja común"}
       color={BCN.oliva}
       accion={{
         icon: IconoMas,
@@ -93,31 +107,42 @@ export default function GastosPage() {
           <div style={{ display: "flex", gap: 9, overflowX: "auto", paddingBottom: 4, marginBottom: 16 }}>
             {botes.map((b) => {
               const saldo = saldoDelBote(gastos, b.id);
-              const pct = b.objetivo ? Math.min(100, Math.max(0, (saldo / b.objetivo) * 100)) : null;
+              // Lo que ha ido saliendo, para saber si el saldo da para mucho
+              const salidas = gastos
+                .filter((g) => g.bote_id === b.id && g.tipo === "gasto")
+                .reduce((t, g) => t + Number(g.importe), 0);
+              const vacio = saldo <= 0;
+              const bajo = !vacio && salidas > 0 && saldo < salidas * 0.2;
+
               return (
-                <div key={b.id} style={{
-                  flexShrink: 0, minWidth: 156, padding: "14px 16px", borderRadius: 16,
-                  background: "white", border: `1px solid ${BCN.arenaOsc}`,
-                  borderTop: `3px solid ${b.color}`,
-                }}>
-                  <p style={{ fontSize: 11.5, color: BCN.humo, margin: 0, fontWeight: 600 }}>{b.nombre}</p>
-                  <p style={{
-                    fontFamily: "Georgia, serif", fontSize: 25, margin: "4px 0 0",
-                    color: saldo < 0 ? BCN.teja : BCN.tinta, lineHeight: 1.1,
+                <button
+                  key={b.id}
+                  onClick={() => { setAnotando("nuevo"); setBoteParaRecargar(b.id); }}
+                  style={{
+                    flexShrink: 0, minWidth: 158, padding: "14px 16px", borderRadius: 16,
+                    background: "white", border: `1px solid ${BCN.arenaOsc}`,
+                    borderTop: `3px solid ${b.color}`, cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <span style={{ display: "block", fontSize: 11.5, color: BCN.humo, fontWeight: 600 }}>
+                    {b.nombre}
+                  </span>
+                  <span style={{
+                    display: "block", fontFamily: "Georgia, serif", fontSize: 25, marginTop: 4,
+                    color: vacio ? BCN.teja : BCN.tinta, lineHeight: 1.1,
                   }}>
                     {eurosCorto(saldo)}
-                  </p>
-                  {pct !== null && (
-                    <>
-                      <div style={{ height: 4, background: BCN.arena, borderRadius: 4, marginTop: 9, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: b.color }} />
-                      </div>
-                      <p style={{ fontSize: 10.5, color: BCN.humo, margin: "5px 0 0" }}>
-                        de {eurosCorto(b.objetivo!)}
-                      </p>
-                    </>
-                  )}
-                </div>
+                  </span>
+                  <span style={{
+                    display: "block", fontSize: 10.5, marginTop: 5,
+                    color: vacio || bajo ? BCN.teja : BCN.humo,
+                    fontWeight: vacio || bajo ? 600 : 400,
+                  }}>
+                    {vacio ? "Vacío · tocad para recargar"
+                      : bajo ? "Queda poco · recargar"
+                      : "Tocad para meter dinero"}
+                  </span>
+                </button>
               );
             })}
 
@@ -160,6 +185,31 @@ export default function GastosPage() {
             ))}
           </div>
 
+          {vista === "movimientos" && meses.length > 1 && (
+            <div style={{
+              display: "flex", gap: 7, overflowX: "auto", paddingBottom: 4, marginBottom: 12,
+            }}>
+              {meses.map((m) => {
+                const activo = m === mes;
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setMes(m)}
+                    style={{
+                      flexShrink: 0, padding: "8px 14px", borderRadius: 18, cursor: "pointer",
+                      border: `1px solid ${activo ? BCN.tinta : BCN.arenaOsc}`,
+                      background: activo ? BCN.tinta : "white",
+                      color: activo ? "white" : BCN.humo,
+                      fontSize: 12.5, fontWeight: activo ? 700 : 500,
+                    }}
+                  >
+                    {nombreDelMes(m)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {vista === "fijos" ? (
             fijos.length === 0 ? (
               <Vacio
@@ -185,6 +235,10 @@ export default function GastosPage() {
               texto="Meted dinero en el bote y empezad a apuntar. Cada gasto puede llevar la foto de su ticket."
               accion={{ label: "Anotar el primero", onClick: () => setAnotando("nuevo") }}
             />
+          ) : delMesElegido.length === 0 ? (
+            <p style={{ textAlign: "center", color: BCN.humo, fontSize: 14, padding: "36px 0", lineHeight: 1.6 }}>
+              Nada apuntado en {nombreDelMes(mes).toLowerCase()}.
+            </p>
           ) : (
             <>
               {categorias.length > 1 && <EnQueSeVa categorias={categorias} />}
@@ -221,8 +275,9 @@ export default function GastosPage() {
         gasto={anotando === "nuevo" ? null : anotando}
         etapaId={etapa?.id ?? null}
         botes={botes}
-        onCerrar={() => setAnotando(null)}
-        onGuardado={async () => { setAnotando(null); await cargar(); }}
+        recargar={boteParaRecargar}
+        onCerrar={() => { setAnotando(null); setBoteParaRecargar(null); }}
+        onGuardado={async () => { setAnotando(null); setBoteParaRecargar(null); await cargar(); }}
       />
 
       <HojaFijo
@@ -385,6 +440,7 @@ function FilaGasto({ gasto, primera, onClick }: { gasto: Gasto; primera: boolean
         </span>
         <span style={{ display: "block", fontSize: 11.5, color: BCN.humo, marginTop: 1 }}>
           {dePagador}
+          {gasto.medio === "efectivo" ? " · 💵" : gasto.medio === "tarjeta" ? " · 💳" : ""}
           {gasto.personal ? " · suyo" : ""}
           {gasto.fijo_id ? " · fijo" : ""}
           {gasto.ticket_url ? " · 🧾" : ""}
@@ -428,6 +484,7 @@ function FilaFijo({ fijo, botes, onEditar }: { fijo: GastoFijo; botes: Bote[]; o
         <span style={{ display: "block", fontSize: 11.5, color: BCN.humo, marginTop: 1 }}>
           Cada día {fijo.dia}
           {fijo.pagado_por === "bote" ? ` · ${bote?.nombre ?? "del bote"}` : ` · lo paga ${fijo.pagado_por === "alejandro" ? "Alejandro" : "Rut"}`}
+          {fijo.medio === "efectivo" ? " · 💵" : fijo.medio === "tarjeta" ? " · 💳" : ""}
           {!fijo.activo ? " · pausado" : ""}
         </span>
       </span>
@@ -440,8 +497,10 @@ function FilaFijo({ fijo, botes, onEditar }: { fijo: GastoFijo; botes: Bote[]; o
 
 /* ─── Anotar un gasto ──────────────────────────────────────── */
 
-function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
+function HojaGasto({ abierta, gasto, etapaId, botes, recargar, onCerrar, onGuardado }: {
   abierta: boolean; gasto: Gasto | null; etapaId: string | null; botes: Bote[];
+  /** Si se ha entrado tocando un bote, se abre listo para meterle dinero. */
+  recargar?: string | null;
   onCerrar: () => void; onGuardado: () => void;
 }) {
   const [tipo, setTipo] = useState<"gasto" | "aportacion">("gasto");
@@ -452,6 +511,8 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
   const [boteId, setBoteId] = useState("");
   const [cat, setCat] = useState("comida");
   const [personal, setPersonal] = useState(false);
+  const [medio, setMedio] = useState<Medio>(null);
+  const [repetir, setRepetir] = useState(false);
   const [ticket, setTicket] = useState<string | null>(null);
   const [nota, setNota] = useState("");
   const [subiendo, setSubiendo] = useState(false);
@@ -461,17 +522,19 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
 
   useEffect(() => {
     if (!abierta) return;
-    setTipo(gasto?.tipo ?? "gasto");
+    setTipo(gasto?.tipo ?? (recargar ? "aportacion" : "gasto"));
     setConcepto(gasto?.concepto ?? "");
     setImporte(gasto ? String(gasto.importe) : "");
     setFecha(gasto?.fecha ?? hoyISO());
     setPagadoPor(gasto?.pagado_por ?? "bote");
-    setBoteId(gasto?.bote_id ?? botes[0]?.id ?? "");
+    setBoteId(gasto?.bote_id ?? recargar ?? botes[0]?.id ?? "");
     setCat(gasto?.categoria ?? "comida");
     setPersonal(gasto?.personal ?? false);
+    setMedio(gasto?.medio ?? null);
+    setRepetir(false);
     setTicket(gasto?.ticket_url ?? null);
     setNota(gasto?.nota ?? "");
-  }, [abierta, gasto, botes]);
+  }, [abierta, gasto, botes, recargar]);
 
   const subirTicket = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -500,11 +563,37 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
       categoria: tipo === "aportacion" ? "otros" : cat,
       // Lo personal solo tiene sentido si lo paga una persona
       personal: tipo === "gasto" && pagadoPor !== "bote" ? personal : false,
+      medio: tipo === "gasto" ? medio : null,
       ticket_url: ticket,
       nota: nota.trim() || null,
     };
-    if (gasto) await updateGasto(gasto.id, campos);
-    else if (etapaId) await addGasto(etapaId, campos);
+    if (gasto) {
+      await updateGasto(gasto.id, campos);
+    } else if (etapaId) {
+      const creado = await addGasto(etapaId, campos);
+
+      // Marcado como fijo: se da de alta para que vuelva cada mes, y el
+      // que acabamos de apuntar queda como el de este mes para que no
+      // salga dos veces.
+      if (repetir && creado) {
+        const periodo = fecha.slice(0, 7);
+        const nuevoFijo = await addFijo(etapaId, {
+          concepto: campos.concepto,
+          importe: campos.importe,
+          dia: Number(fecha.slice(8, 10)),
+          pagado_por: campos.pagado_por as FormaPago,
+          bote_id: campos.bote_id,
+          personal: campos.personal,
+          medio: campos.medio,
+          categoria: campos.categoria,
+          activo: true,
+          desde: fecha,
+        });
+        if (nuevoFijo) {
+          await updateGasto(creado.id, { fijo_id: nuevoFijo.id, fijo_periodo: periodo });
+        }
+      }
+    }
     setGuardando(false);
     onGuardado();
   };
@@ -660,9 +749,72 @@ function HojaGasto({ abierta, gasto, etapaId, botes, onCerrar, onGuardado }: {
         </Campo>
       )}
 
+      {tipo === "gasto" && (
+        <Campo label="¿Con qué se pagó?">
+          <div style={{ display: "flex", gap: 8 }}>
+            {([
+              [null, "No importa", "—"],
+              ["efectivo", "Efectivo", "💵"],
+              ["tarjeta", "Tarjeta", "💳"],
+            ] as [Medio, string, string][]).map(([m, etiqueta, icono]) => {
+              const act = medio === m;
+              return (
+                <button
+                  key={etiqueta}
+                  onClick={() => setMedio(m)}
+                  style={{
+                    flex: 1, padding: "10px 6px", borderRadius: 12, cursor: "pointer",
+                    border: `1.5px solid ${act ? BCN.mar : BCN.arenaOsc}`,
+                    background: act ? `${BCN.mar}12` : "white",
+                    color: act ? BCN.mar : BCN.humo,
+                    fontSize: 12.5, fontWeight: act ? 700 : 500,
+                  }}
+                >
+                  <span style={{ fontSize: 15, display: "block", marginBottom: 2 }}>{icono}</span>
+                  {etiqueta}
+                </button>
+              );
+            })}
+          </div>
+        </Campo>
+      )}
+
       <Campo label="Fecha">
         <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} style={estiloInput} />
       </Campo>
+
+      {tipo === "gasto" && !gasto && (
+        <button
+          onClick={() => setRepetir(!repetir)}
+          style={{
+            display: "flex", alignItems: "center", gap: 11, width: "100%", textAlign: "left",
+            padding: "13px 14px", borderRadius: 12, marginBottom: 16, cursor: "pointer",
+            border: `1.5px solid ${repetir ? BCN.teja : BCN.arenaOsc}`,
+            background: repetir ? `${BCN.teja}12` : "white",
+          }}
+        >
+          <span style={{
+            width: 42, height: 25, borderRadius: 13, flexShrink: 0, position: "relative",
+            background: repetir ? BCN.teja : BCN.arenaOsc, transition: "background .18s",
+          }}>
+            <span style={{
+              position: "absolute", top: 3, left: repetir ? 20 : 3,
+              width: 19, height: 19, borderRadius: "50%", background: "white",
+              transition: "left .18s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+            }} />
+          </span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: BCN.tinta }}>
+              Se repite cada mes
+            </span>
+            <span style={{ display: "block", fontSize: 11.5, color: BCN.humo, marginTop: 2, lineHeight: 1.4 }}>
+              {repetir
+                ? `Volverá a apuntarse solo cada día ${Number(fecha.slice(8, 10))}`
+                : "Para el alquiler, la luz, el móvil…"}
+            </span>
+          </span>
+        </button>
+      )}
 
       {tipo === "gasto" && (
         <Campo label="Ticket">
@@ -930,38 +1082,32 @@ function HojaBote({ abierta, etapaId, onCerrar, onGuardado }: {
   abierta: boolean; etapaId: string | null; onCerrar: () => void; onGuardado: () => void;
 }) {
   const [nombre, setNombre] = useState("");
-  const [objetivo, setObjetivo] = useState("");
   const [color, setColor] = useState<string>(BCN.teja);
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     if (!abierta) return;
-    setNombre(""); setObjetivo(""); setColor(BCN.teja);
+    setNombre(""); setColor(BCN.teja);
   }, [abierta]);
 
   const guardar = async () => {
     if (!nombre.trim() || !etapaId || guardando) return;
     setGuardando(true);
-    const meta = Number(objetivo.replace(",", "."));
-    await addBote(etapaId, {
-      nombre: nombre.trim(),
-      color,
-      objetivo: Number.isFinite(meta) && meta > 0 ? meta : null,
-    });
+    await addBote(etapaId, { nombre: nombre.trim(), color });
     setGuardando(false);
     onGuardado();
   };
 
   return (
     <Hoja abierta={abierta} onCerrar={onCerrar} titulo="Nuevo bote">
+      <p style={{ fontSize: 13, color: BCN.humo, margin: "-10px 0 16px", lineHeight: 1.55 }}>
+        Una hucha común: metéis dinero y de ahí van saliendo los gastos.
+        Cuando baje, se recarga.
+      </p>
+
       <Campo label="Nombre">
         <input value={nombre} onChange={(e) => setNombre(e.target.value)}
-          placeholder="La fianza" style={estiloInput} />
-      </Campo>
-
-      <Campo label="¿Queréis juntar una cantidad?">
-        <input value={objetivo} onChange={(e) => setObjetivo(e.target.value)}
-          placeholder="Opcional. 3.000" inputMode="decimal" style={estiloInput} />
+          placeholder="Bote de agosto" style={estiloInput} />
       </Campo>
 
       <Campo label="Color">
