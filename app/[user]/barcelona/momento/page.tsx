@@ -10,7 +10,8 @@ import {
 } from "@/lib/barcelona/types";
 import { getEtapaActiva, getBarrios, getContactos, addMomento, hoyISO } from "@/lib/barcelona/queries";
 import { avisar } from "@/lib/barcelona/avisar";
-import { subirFoto as subirAlServidor, fechaDeLaFoto } from "@/lib/upload";
+import { subirMedia as subirAlServidor, fechaDeLaFoto, esVideo } from "@/lib/upload";
+import { Media } from "@/components/barcelona/Media";
 import { Pantalla, Campo, estiloInput, Boton } from "@/components/barcelona/Shell";
 
 /** Atajos para no teclear. No es una lista cerrada: se puede escribir lo que sea. */
@@ -173,9 +174,13 @@ export default function MomentoPage() {
     let masAntigua: Date | null = null;
 
     for (const f of files) {
-      // La fecha hay que leerla antes de subir: al encogerla se pierde
-      const cuando = await fechaDeLaFoto(f);
-      if (cuando && (!masAntigua || cuando < masAntigua)) masAntigua = cuando;
+      // La fecha hay que leerla antes de subir: al encogerla se pierde.
+      // En los vídeos no la buscamos: va en otro sitio del archivo y con
+      // otro formato, y la fecha del momento ya la ponéis vosotros.
+      if (!esVideo(f)) {
+        const cuando = await fechaDeLaFoto(f);
+        if (cuando && (!masAntigua || cuando < masAntigua)) masAntigua = cuando;
+      }
 
       const r = await subirAlServidor(f, "barcelona");
       if (r.url) urls.push(r.url);
@@ -418,14 +423,14 @@ export default function MomentoPage() {
         </Campo>
       )}
 
-      {/* Fotos */}
-      <Campo label="Fotos">
+      {/* Fotos y vídeos */}
+      <Campo label="Fotos y vídeos">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {fotos.map((url, i) => (
             <motion.div key={url} initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
               style={{ position: "relative", width: 72, height: 72, borderRadius: 12, overflow: "hidden", border: `1px solid ${BCN.arenaOsc}` }}>
-              <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              <button onClick={() => setFotos(fotos.filter((_, j) => j !== i))} aria-label="Quitar foto"
+              <Media url={url} style={{ width: "100%", height: "100%" }} />
+              <button onClick={() => setFotos(fotos.filter((_, j) => j !== i))} aria-label="Quitar"
                 style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", background: "rgba(44,36,32,0.75)", border: "none", color: "white", fontSize: 12, cursor: "pointer", lineHeight: 1, padding: 0 }}>
                 ×
               </button>
@@ -436,8 +441,12 @@ export default function MomentoPage() {
             {subiendo ? "…" : "+"}
           </button>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" multiple onChange={subirFoto}
+        <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={subirFoto}
           style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }} />
+
+        <p style={{ fontSize: 11.5, color: BCN.humo, margin: "7px 0 0", lineHeight: 1.5 }}>
+          Los vídeos, cortos: hasta 50 MB, que son unos 20 o 30 segundos.
+        </p>
 
         {subiendo && (
           <p style={{ fontSize: 12.5, color: BCN.humo, margin: "8px 0 0" }}>

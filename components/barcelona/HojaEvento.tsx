@@ -7,7 +7,8 @@ import {
   type Momento, type TipoMomento, type Barrio, type Autor, type Contacto,
 } from "@/lib/barcelona/types";
 import { updateMomento, deleteMomento, formatFechaLarga, nombreDia } from "@/lib/barcelona/queries";
-import { subirFoto } from "@/lib/upload";
+import { subirMedia as subirFoto } from "@/lib/upload";
+import { Media } from "@/components/barcelona/Media";
 import { avisar } from "@/lib/barcelona/avisar";
 import { useUserStore } from "@/store/userStore";
 import { Hoja, Campo, estiloInput, Selector } from "@/components/barcelona/Shell";
@@ -232,14 +233,14 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
               ]} />
           </Campo>
 
-          <Campo label="Fotos">
+          <Campo label="Fotos y vídeos">
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {fotos.map((url, i) => (
                 <div key={url} style={{ position: "relative", width: 74, height: 74 }}>
-                  <img src={url} alt="" onClick={() => visor.abrir(i)}
+                  <Media url={url} onClick={() => visor.abrir(i)}
                     style={{
-                      width: "100%", height: "100%", objectFit: "cover", borderRadius: 12,
-                      border: `1px solid ${BCN.arenaOsc}`, display: "block", cursor: "zoom-in",
+                      width: "100%", height: "100%", borderRadius: 12,
+                      border: `1px solid ${BCN.arenaOsc}`, overflow: "hidden",
                     }} />
                   <button
                     onClick={() => setFotos(fotos.filter((_, j) => j !== i))}
@@ -264,8 +265,12 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
               </button>
             </div>
 
-            <input ref={fileRef} type="file" accept="image/*" multiple onChange={anadirFotos}
+            <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={anadirFotos}
               style={{ position: "absolute", opacity: 0, width: 1, height: 1, pointerEvents: "none" }} />
+
+            <p style={{ fontSize: 11.5, color: BCN.humo, margin: "7px 0 0", lineHeight: 1.5 }}>
+              Los vídeos, cortos: hasta 50 MB, que son unos 20 o 30 segundos.
+            </p>
 
             {falloFoto && !subiendoFoto && (
               <p style={{ fontSize: 12.5, color: BCN.teja, margin: "8px 0 0", lineHeight: 1.5 }}>
@@ -352,8 +357,8 @@ export function HojaEvento({ momento, barrios, contactos = [], onCerrar, onCambi
           {momento.fotos.length > 0 && (
             <div style={{ display: "flex", gap: 7, overflowX: "auto", marginBottom: 16, paddingBottom: 4 }}>
               {momento.fotos.map((url, i) => (
-                <img key={url} src={url} alt="" onClick={() => visor.abrir(i)}
-                  style={{ width: 96, height: 96, borderRadius: 11, objectFit: "cover", flexShrink: 0, border: `1px solid ${BCN.arenaOsc}`, cursor: "zoom-in" }} />
+                <Media key={url} url={url} onClick={() => visor.abrir(i)}
+                  style={{ width: 96, height: 96, borderRadius: 11, flexShrink: 0, border: `1px solid ${BCN.arenaOsc}`, overflow: "hidden" }} />
               ))}
             </div>
           )}

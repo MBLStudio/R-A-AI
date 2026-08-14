@@ -9,6 +9,10 @@ import { supabase } from "../supabase";
 import { rankear, calcularCompatibilidad } from "./compat";
 import { TIPO_MOMENTO, TIPO_CONTACTO } from "./types";
 import type { Etapa, Barrio, Momento, Piso, Valoracion, Contacto } from "./types";
+import {
+  saldoDelBote, calcularBalance, porCategoria, delMes, categoria, euros,
+} from "./gastos";
+import type { Gasto, Bote, GastoFijo, FormaPago } from "./gastos";
 
 export interface DatosEtapa {
   etapa: Etapa;
@@ -17,18 +21,25 @@ export interface DatosEtapa {
   pisos: Piso[];
   valoraciones: Valoracion[];
   contactos: Contacto[];
+  gastos: Gasto[];
+  botes: Bote[];
+  fijos: GastoFijo[];
 }
 
 /** Carga todo el estado de una etapa en paralelo (uso servidor). */
 export async function cargarDatos(etapaId: string): Promise<DatosEtapa | null> {
-  const [etapa, barrios, momentos, pisos, valoraciones, contactos] = await Promise.all([
-    supabase.from("bcn_etapas").select("*").eq("id", etapaId).maybeSingle(),
-    supabase.from("bcn_barrios").select("*").eq("etapa_id", etapaId).order("orden"),
-    supabase.from("bcn_momentos").select("*").eq("etapa_id", etapaId).order("fecha", { ascending: false }),
-    supabase.from("bcn_pisos").select("*").eq("etapa_id", etapaId),
-    supabase.from("bcn_valoraciones").select("*").eq("etapa_id", etapaId),
-    supabase.from("bcn_contactos").select("*").eq("etapa_id", etapaId),
-  ]);
+  const [etapa, barrios, momentos, pisos, valoraciones, contactos, gastos, botes, fijos] =
+    await Promise.all([
+      supabase.from("bcn_etapas").select("*").eq("id", etapaId).maybeSingle(),
+      supabase.from("bcn_barrios").select("*").eq("etapa_id", etapaId).order("orden"),
+      supabase.from("bcn_momentos").select("*").eq("etapa_id", etapaId).order("fecha", { ascending: false }),
+      supabase.from("bcn_pisos").select("*").eq("etapa_id", etapaId),
+      supabase.from("bcn_valoraciones").select("*").eq("etapa_id", etapaId),
+      supabase.from("bcn_contactos").select("*").eq("etapa_id", etapaId),
+      supabase.from("bcn_gastos").select("*").eq("etapa_id", etapaId).order("fecha", { ascending: false }),
+      supabase.from("bcn_botes").select("*").eq("etapa_id", etapaId).eq("archivado", false).order("orden"),
+      supabase.from("bcn_gastos_fijos").select("*").eq("etapa_id", etapaId).order("dia"),
+    ]);
 
   if (!etapa.data) return null;
 
@@ -39,6 +50,9 @@ export async function cargarDatos(etapaId: string): Promise<DatosEtapa | null> {
     pisos: (pisos.data ?? []) as Piso[],
     valoraciones: (valoraciones.data ?? []) as Valoracion[],
     contactos: (contactos.data ?? []) as Contacto[],
+    gastos: (gastos.data ?? []) as Gasto[],
+    botes: (botes.data ?? []) as Bote[],
+    fijos: (fijos.data ?? []) as GastoFijo[],
   };
 }
 
@@ -144,6 +158,73 @@ export function construirContexto(d: DatosEtapa, detalle: "resumen" | "completo"
     }
   } else {
     p.push("\nPISOS: todavía no han guardado ninguno.");
+  }
+
+  // ── Dinero ──
+  //
+  // Va justo detrás de los pisos a propósito: la pregunta de verdad
+  // no es "¿nos gusta este piso?" sino "¿nos lo podemos permitir con
+  // lo que estamos gastando?", y para contestarla hay que tener las
+  // dos cosas a la vista.
+  //
+  // La deuda se da ya calculada y con la advertencia al lado. Es el
+  // error clásico al repartir gastos —decir la diferencia entera en
+  // vez de la mitad— y así no hay ocasión de cometerlo.
+  if (d.gastos.length === 0 && d.botes.length === 0) {
+    p.push("\nDINERO: todavía no han apuntado ningún gasto.");
+  } else {
+    p.push("\nDINERO:");
+
+    for (const b of d.botes) {
+      const saldo = saldoDelBote(d.gastos, b.id);
+      p.push(`- Bote "${b.nombre}": quedan ${euros(saldo)}${b.objetivo ? ` (el objetivo era ${euros(b.objetivo)})` : ""}.`);
+    }
+
+    const mesActual = hoy.slice(0, 7);
+    const gastosDelMes = delMes(d.gastos, mesActual);
+    const comunes = gastosDelMes.filter((g) => g.tipo === "gasto" && !g.personal);
+    const gastadoMes = comunes.reduce((t, g) => t + g.importe, 0);
+    p.push(`- Llevan gastados este mes ${euros(gastadoMes)} en ${comunes.length} apuntes (sin contar lo personal de cada uno).`);
+
+    const cats = porCategoria(gastosDelMes);
+    if (cats.length > 0) {
+      p.push(`  En qué se va: ${cats.slice(0, completo ? 7 : 4).map((c) => `${categoria(c.clave).label} ${euros(c.total)}`).join(" · ")}`);
+    }
+
+    const bal = calcularBalance(d.gastos);
+    p.push(`- Ha puesto cada uno desde el principio: Alejandro ${euros(bal.total.alejandro)}, Rut ${euros(bal.total.rut)}.`);
+    if (bal.quienVaDelante) {
+      const delante = bal.quienVaDelante === "alejandro" ? "Alejandro" : "Rut";
+      const detras = bal.quienVaDelante === "alejandro" ? "Rut" : "Alejandro";
+      p.push(`  ${delante} va por delante. Para quedar en paz, ${detras} le daría ${euros(bal.deuda)} — esa cifra ya es la mitad de la diferencia y es la buena; no digas nunca la diferencia entera.`);
+    } else {
+      p.push("  Están en paz: nadie le debe nada a nadie.");
+    }
+
+    // Solo el que tenga algo: poner "Rut 0,00 €" invita a comentarlo
+    const suyo: string[] = [];
+    if (bal.personal.alejandro > 0) suyo.push(`Alejandro ${euros(bal.personal.alejandro)}`);
+    if (bal.personal.rut > 0) suyo.push(`Rut ${euros(bal.personal.rut)}`);
+    if (suyo.length > 0) {
+      p.push(`- Sus cosas de cada uno, que no entran en el reparto: ${suyo.join(", ")}.`);
+    }
+
+    const activos = d.fijos.filter((f) => f.activo);
+    if (activos.length > 0) {
+      const suma = activos.reduce((t, f) => t + f.importe, 0);
+      p.push(`- Fijos de todos los meses (${euros(suma)} en total): ${activos.map((f) => `${f.concepto} ${euros(f.importe)} el día ${f.dia}`).join(" · ")}`);
+    }
+
+    if (completo && d.gastos.length > 0) {
+      const dePagador = (f: FormaPago) =>
+        f === "bote" ? "del bote" : f === "alejandro" ? "lo puso Alejandro" : "lo puso Rut";
+      p.push("  Últimos apuntes:");
+      for (const g of d.gastos.slice(0, 30)) {
+        const qué = g.tipo === "aportacion" ? "APORTACIÓN al bote" : categoria(g.categoria).label;
+        p.push(`  · ${g.fecha} — ${g.concepto}: ${euros(g.importe)} (${qué}, ${dePagador(g.pagado_por)})${g.personal ? " [personal]" : ""}`);
+        if (g.nota) p.push(`    "${g.nota}"`);
+      }
+    }
   }
 
   // ── Contactos ──

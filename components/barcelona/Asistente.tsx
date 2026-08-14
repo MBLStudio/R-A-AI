@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BCN, type Etapa } from "@/lib/barcelona/types";
+import { Visor, useVisor } from "@/components/barcelona/Visor";
+import { Media } from "@/components/barcelona/Media";
 import type { UserName } from "@/store/userStore";
 
 /* ═══════════════════════════════════════════════════════════
@@ -17,7 +19,15 @@ import type { UserName } from "@/store/userStore";
    con dejar el archivo en /public — no hay que tocar código.
    ═══════════════════════════════════════════════════════════ */
 
-interface Mensaje { role: "user" | "assistant"; content: string }
+interface RefFoto { url: string; titulo: string; fecha: string }
+interface RefPiso {
+  titulo: string; precio: number | null; m2: number | null;
+  barrio: string | null; estado: string; url: string | null; foto: string | null;
+}
+/** Lo que Olmo puede sacar en pantalla en esta respuesta. */
+interface Refs { fotos: RefFoto[]; pisos: RefPiso[] }
+
+interface Mensaje { role: "user" | "assistant"; content: string; refs?: Refs }
 
 const SUGERENCIAS = [
   "¿Cómo vamos?",
@@ -74,6 +84,8 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acumulado = "";
+      let pendiente = "";
+      let refs: Refs | undefined;
 
       setMensajes((prev) => [...prev, { role: "assistant", content: "" }]);
       setPensando(false);
@@ -81,20 +93,31 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        for (const linea of decoder.decode(value).split("\n")) {
-          if (linea.startsWith("data: ") && linea.slice(6) !== "[DONE]") {
-            try {
-              const t = JSON.parse(linea.slice(6)).text;
-              if (t) {
-                acumulado += t;
-                setMensajes((prev) => {
-                  const copia = [...prev];
-                  copia[copia.length - 1] = { role: "assistant", content: acumulado };
-                  return copia;
-                });
-              }
-            } catch {}
-          }
+
+        // Un trozo de red puede cortar una línea por la mitad. Lo que
+        // quede suelto al final espera al siguiente trozo; si no, esa
+        // parte de la respuesta se perdía sin que se notara.
+        pendiente += decoder.decode(value, { stream: true });
+        const lineas = pendiente.split("\n");
+        pendiente = lineas.pop() ?? "";
+
+        for (const linea of lineas) {
+          if (!linea.startsWith("data: ") || linea.slice(6) === "[DONE]") continue;
+          try {
+            const dato = JSON.parse(linea.slice(6));
+
+            // Llega lo primero: lo que puede enseñar en esta respuesta
+            if (dato.refs) { refs = dato.refs as Refs; continue; }
+
+            if (dato.text) {
+              acumulado += dato.text;
+              setMensajes((prev) => {
+                const copia = [...prev];
+                copia[copia.length - 1] = { role: "assistant", content: acumulado, refs };
+                return copia;
+              });
+            }
+          } catch {}
         }
       }
     } catch {
@@ -399,25 +422,165 @@ function Futbolista() {
 
 /* ─── Piezas del chat ──────────────────────────────────────── */
 
+/* ─── Lo que Olmo enseña dentro de su respuesta ────────────── */
+
+type Trozo =
+  | { tipo: "texto"; valor: string }
+  | { tipo: "foto" | "piso"; n: number };
+
+/**
+ * Parte la respuesta por los marcadores [foto:N] y [piso:N].
+ *
+ * Se hace en cada repintado porque el texto llega letra a letra:
+ * en cuanto el marcador está completo, se convierte solo.
+ */
+function trocear(texto: string): Trozo[] {
+  // Mientras se escribe se ve "[fot", "[foto:", "[foto:2"… Se recorta
+  // ese principio a medias para que no parpadee en pantalla.
+  const limpio = texto.replace(/\[(?:f(?:o(?:t(?:o)?)?)?|p(?:i(?:s(?:o)?)?)?)?(?::\d*)?$/, "");
+
+  const trozos: Trozo[] = [];
+  let desde = 0;
+
+  for (const m of limpio.matchAll(/\[(foto|piso):(\d+)\]/g)) {
+    const i = m.index ?? 0;
+    if (i > desde) trozos.push({ tipo: "texto", valor: limpio.slice(desde, i) });
+    trozos.push({ tipo: m[1] as "foto" | "piso", n: Number(m[2]) });
+    desde = i + m[0].length;
+  }
+  if (desde < limpio.length) trozos.push({ tipo: "texto", valor: limpio.slice(desde) });
+
+  return trozos;
+}
+
+/**
+ * Olmo recalca **así**, como todo el mundo al escribir.
+ * Sin esto se leían los asteriscos tal cual.
+ */
+function conNegritas(texto: string) {
+  return texto.split(/(\*\*[^*]+\*\*)/g).map((t, i) =>
+    t.length > 4 && t.startsWith("**") && t.endsWith("**")
+      ? <strong key={i} style={{ fontWeight: 700 }}>{t.slice(2, -2)}</strong>
+      : <span key={i}>{t}</span>
+  );
+}
+
 function Burbuja({ mensaje }: { mensaje: Mensaje }) {
   const esUsuario = mensaje.role === "user";
+  const visor = useVisor();
+
+  const trozos = esUsuario ? null : trocear(mensaje.content);
+
+  // Las fotos que han salido, en orden: para poder pasar entre ellas
+  const salidas = (trozos ?? [])
+    .filter((t): t is { tipo: "foto"; n: number } => t.tipo === "foto")
+    .map((t) => mensaje.refs?.fotos[t.n - 1])
+    .filter((f): f is RefFoto => !!f);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }}
-      style={{ display: "flex", justifyContent: esUsuario ? "flex-end" : "flex-start", marginBottom: 10 }}
+    <>
+      <motion.div
+        initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }}
+        style={{ display: "flex", justifyContent: esUsuario ? "flex-end" : "flex-start", marginBottom: 10 }}
+      >
+        <div style={{
+          maxWidth: "88%", padding: "11px 15px",
+          borderRadius: esUsuario ? "17px 17px 5px 17px" : "17px 17px 17px 5px",
+          background: esUsuario ? "#8B1538" : "white",
+          color: esUsuario ? "white" : BCN.tinta,
+          border: esUsuario ? "none" : `1px solid ${BCN.arenaOsc}`,
+          fontSize: 14.5, lineHeight: 1.6, wordBreak: "break-word",
+        }}>
+          {esUsuario ? (
+            <span style={{ whiteSpace: "pre-wrap" }}>{mensaje.content}</span>
+          ) : (
+            trozos!.map((t, i) => {
+              if (t.tipo === "texto") {
+                return <span key={i} style={{ whiteSpace: "pre-wrap" }}>{conNegritas(t.valor)}</span>;
+              }
+              if (t.tipo === "foto") {
+                const f = mensaje.refs?.fotos[t.n - 1];
+                if (!f) return null;
+                const orden = salidas.findIndex((x) => x.url === f.url);
+                return <FotoDicha key={i} foto={f} onAbrir={() => visor.abrir(Math.max(0, orden))} />;
+              }
+              const p = mensaje.refs?.pisos[t.n - 1];
+              return p ? <FichaPiso key={i} piso={p} /> : null;
+            })
+          )}
+        </div>
+      </motion.div>
+
+      {salidas.length > 0 && (
+        <Visor fotos={salidas.map((f) => f.url)} indice={visor.indice} onCerrar={visor.cerrar} />
+      )}
+    </>
+  );
+}
+
+function FotoDicha({ foto, onAbrir }: { foto: RefFoto; onAbrir: () => void }) {
+  return (
+    <button
+      onClick={onAbrir}
+      style={{
+        display: "block", width: "100%", margin: "9px 0 3px", padding: 0,
+        border: "none", background: "transparent", cursor: "pointer",
+      }}
     >
       <div style={{
-        maxWidth: "88%", padding: "11px 15px",
-        borderRadius: esUsuario ? "17px 17px 5px 17px" : "17px 17px 17px 5px",
-        background: esUsuario ? "#8B1538" : "white",
-        color: esUsuario ? "white" : BCN.tinta,
-        border: esUsuario ? "none" : `1px solid ${BCN.arenaOsc}`,
-        fontSize: 14.5, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word",
+        position: "relative", width: "100%", height: 158,
+        borderRadius: 12, overflow: "hidden",
       }}>
-        {mensaje.content}
+        <Media url={foto.url} style={{ width: "100%", height: "100%" }} />
+        <div style={{
+          position: "absolute", left: 0, right: 0, bottom: 0,
+          padding: "20px 11px 8px", textAlign: "left",
+          background: "linear-gradient(180deg, transparent, rgba(0,0,0,0.6))",
+        }}>
+          <p style={{ fontSize: 11.5, color: "white", margin: 0, fontWeight: 600 }}>{foto.titulo}</p>
+          <p style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", margin: "1px 0 0" }}>{foto.fecha}</p>
+        </div>
       </div>
-    </motion.div>
+    </button>
   );
+}
+
+function FichaPiso({ piso }: { piso: RefPiso }) {
+  const datos = [
+    piso.precio ? `${piso.precio} €/mes` : null,
+    piso.m2 ? `${piso.m2} m²` : null,
+    piso.barrio,
+  ].filter(Boolean).join(" · ");
+
+  const cuerpo = (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, textAlign: "left",
+      border: `1px solid ${BCN.arenaOsc}`, borderRadius: 12,
+      padding: 9, background: BCN.arena, margin: "9px 0 3px",
+    }}>
+      {piso.foto && (
+        <div style={{
+          width: 52, height: 52, borderRadius: 9, flexShrink: 0,
+          backgroundImage: `url(${piso.foto})`,
+          backgroundSize: "cover", backgroundPosition: "center",
+        }} />
+      )}
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{
+          fontSize: 13, fontWeight: 650, color: BCN.tinta, margin: 0,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {piso.titulo}
+        </p>
+        {datos && <p style={{ fontSize: 11.5, color: BCN.humo, margin: "2px 0 0" }}>{datos}</p>}
+      </div>
+      {piso.url && <span style={{ color: BCN.teja, fontSize: 15, flexShrink: 0 }}>↗</span>}
+    </div>
+  );
+
+  return piso.url
+    ? <a href={piso.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", display: "block" }}>{cuerpo}</a>
+    : cuerpo;
 }
 
 function Puntos() {

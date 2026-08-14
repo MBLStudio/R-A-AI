@@ -143,3 +143,86 @@ export async function uploadPhoto(file: File, folder: string): Promise<string | 
   const { url } = await subirFoto(file, folder);
   return url;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Vídeos
+
+   Un vídeo no puede pasar por nuestro servidor: Vercel corta a
+   los 4,5 MB y el más corto del iPhone ya son quince. Así que va
+   directo a Supabase con un permiso firmado, y el tope pasa a ser
+   el del almacén: 50 MB, que son unos 20-30 segundos en 1080p.
+
+   Tampoco se puede encoger antes, como hacemos con las fotos: en
+   el navegador no hay nada que recomprima vídeo sin descargarse
+   medio programa. Por eso, cuando no entra, lo único honesto es
+   decirlo con el peso delante y no dejar que falle a medias.
+   ═══════════════════════════════════════════════════════════ */
+
+const MAXIMO_VIDEO = 50 * 1024 * 1024;
+
+export function esVideo(file: File): boolean {
+  return file.type.startsWith("video/") || /\.(mp4|mov|m4v|webm|avi|3gp)$/i.test(file.name);
+}
+
+const enMB = (bytes: number) => Math.round(bytes / 1024 / 1024);
+
+export async function subirVideo(file: File, folder: string): Promise<ResultadoSubida> {
+  if (file.size > MAXIMO_VIDEO) {
+    return {
+      url: null,
+      error: `El vídeo pesa ${enMB(file.size)} MB y el tope son ${enMB(MAXIMO_VIDEO)}. Probad con uno más corto: unos 20 o 30 segundos entran de sobra.`,
+    };
+  }
+
+  try {
+    // 1. Pedimos permiso para escribir en un sitio concreto
+    const permiso = await fetch("/api/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nombre: file.name, folder, tamano: file.size }),
+    });
+
+    if (!permiso.ok) {
+      const detalle = await permiso.json().catch(() => null);
+      return { url: null, error: detalle?.error ?? "No hemos podido preparar la subida." };
+    }
+
+    const { ruta, token, url } = (await permiso.json()) as {
+      ruta: string; token: string; url: string;
+    };
+
+    // 2. El vídeo va del móvil a Supabase sin escala
+    const { createClient } = await import("@supabase/supabase-js");
+    const almacen = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false, autoRefreshToken: false } }
+    );
+
+    const { error } = await almacen.storage
+      .from("ra-photos")
+      .uploadToSignedUrl(ruta, token, file, { contentType: file.type || "video/mp4" });
+
+    if (error) {
+      const dice = error.message.toLowerCase();
+      if (dice.includes("exceeded") || dice.includes("maximum")) {
+        return { url: null, error: `El vídeo es demasiado grande. El tope son ${enMB(MAXIMO_VIDEO)} MB.` };
+      }
+      return { url: null, error: "No hemos podido subir el vídeo. Inténtalo otra vez." };
+    }
+
+    return { url, error: null };
+  } catch {
+    return { url: null, error: "Sin conexión. Inténtalo otra vez." };
+  }
+}
+
+/** Foto o vídeo, lo que sea que hayan elegido. */
+export async function subirMedia(file: File, folder: string): Promise<ResultadoSubida> {
+  return esVideo(file) ? subirVideo(file, folder) : subirFoto(file, folder);
+}
+
+/** Si una URL guardada es un vídeo, para saber cómo pintarla. */
+export function urlEsVideo(url: string): boolean {
+  return /\.(mp4|mov|m4v|webm|avi|3gp)(\?|$)/i.test(url);
+}

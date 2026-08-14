@@ -12,6 +12,7 @@ import {
 } from "@/lib/barcelona/queries";
 import { Fondo, HojaFondos } from "@/components/barcelona/Fondo";
 import { Asistente } from "@/components/barcelona/Asistente";
+import { OlmoHoy } from "@/components/barcelona/Olmo";
 
 /* ═══════════════════════════════════════════════════════════
    Proyecto Barcelona — el índice del capítulo.
@@ -120,6 +121,9 @@ export default function BarcelonaPage() {
             <SinEtapa />
           ) : (
             <>
+              {/* Olmo va primero: es lo único que habla sin que le preguntéis */}
+              <OlmoHoy etapaId={etapa?.id ?? null} onIr={ir} />
+
               {/* Lo próximo */}
               {proximos.length > 0 && (
                 <Proximo momento={proximos[0]} onClick={() => ir("agenda")} />
@@ -274,7 +278,7 @@ function Proximo({ momento, onClick }: { momento: Momento; onClick: () => void }
       initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}
       whileTap={{ scale: 0.98 }} onClick={onClick}
       style={{
-        width: "100%", border: `1px solid ${BCN.arenaOsc}`, cursor: "pointer", textAlign: "left",
+        width: "100%", marginTop: 10, border: `1px solid ${BCN.arenaOsc}`, cursor: "pointer", textAlign: "left",
         borderRadius: 16, padding: "14px 16px", background: "white",
         display: "flex", alignItems: "center", gap: 13,
         boxShadow: "0 2px 10px rgba(44,36,32,0.05)",

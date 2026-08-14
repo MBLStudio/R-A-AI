@@ -8,6 +8,7 @@ import { BCN, TIPO_MOMENTO, pintarMomento, type Momento, type Etapa } from "@/li
 import { getEtapaActiva, getHistoria, deleteMomento } from "@/lib/barcelona/queries";
 import { Pantalla, Vacio, IconoMas } from "@/components/barcelona/Shell";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
+import { Media } from "@/components/barcelona/Media";
 
 export default function HistoriaPage() {
   const params = useParams();
@@ -163,13 +164,13 @@ function Nodo({ momento, delay, abierto, onToggle, onBorrar }: {
           {momento.fotos.length > 0 && (
             <div style={{ display: "flex", gap: 6, marginTop: 10, overflowX: "auto" }}>
               {momento.fotos.map((url, i) => (
-                <img key={url} src={url} alt=""
+                <Media key={url} url={url}
                   onClick={(e) => { e.stopPropagation(); visor.abrir(i); }}
                   style={{
                     width: abierto ? 130 : 74, height: abierto ? 130 : 74,
                     borderRadius: 10, objectFit: "cover", flexShrink: 0,
                     border: `1px solid ${BCN.arenaOsc}`, transition: "all 0.25s",
-                    cursor: "zoom-in",
+                    overflow: "hidden",
                   }} />
               ))}
             </div>

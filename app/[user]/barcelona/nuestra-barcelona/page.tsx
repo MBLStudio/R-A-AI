@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN, type Etapa, type Momento } from "@/lib/barcelona/types";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
+import { Media } from "@/components/barcelona/Media";
 import { getEtapaActiva, getHistoria, diasEnCiudad, formatFechaLarga } from "@/lib/barcelona/queries";
 
 /* ═══════════════════════════════════════════════════════════
@@ -447,12 +448,7 @@ function Collage({ fotos, hoja, onVer }: {
               overflow: "hidden",
               background: BCN.arena,
             }}>
-              <img
-                src={url}
-                alt=""
-                loading="lazy"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
+              <Media url={url} style={{ width: "100%", height: "100%" }} />
             </span>
 
             {/* Un trozo de cinta sujetando la esquina */}

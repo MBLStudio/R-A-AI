@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { urlEsVideo } from "@/lib/upload";
 
 /* ═══════════════════════════════════════════════════════════
    Ver una foto en grande.
@@ -44,7 +45,9 @@ export function Visor({ fotos, indice, onCerrar }: {
 
   const abierto = indice !== null && fotos.length > 0;
   const varias = fotos.length > 1;
-  const ampliada = escala > 1.02;
+  const esVideoActual = !!fotos[actual] && urlEsVideo(fotos[actual]);
+  // Un vídeo no se amplía: se ve y ya
+  const ampliada = !esVideoActual && escala > 1.02;
 
   const reiniciarZoom = useCallback(() => {
     setEscala(1);
@@ -271,16 +274,18 @@ export function Visor({ fotos, indice, onCerrar }: {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
           onClick={() => { if (!ampliada) onCerrar(); }}
-          onTouchStart={alTocar}
-          onTouchMove={alMover}
-          onTouchEnd={alSoltar}
-          onWheel={alaRueda}
+          // Con un vídeo delante, los gestos se los queda el reproductor:
+          // si le robamos el toque, no se puede ni mover la barra.
+          onTouchStart={esVideoActual ? undefined : alTocar}
+          onTouchMove={esVideoActual ? undefined : alMover}
+          onTouchEnd={esVideoActual ? undefined : alSoltar}
+          onWheel={esVideoActual ? undefined : alaRueda}
           style={{
             position: "fixed", inset: 0, zIndex: 200,
             background: "rgba(12,8,6,0.96)",
             display: "flex", alignItems: "center", justifyContent: "center",
             padding: "env(safe-area-inset-top) 0 env(safe-area-inset-bottom)",
-            touchAction: "none", overflow: "hidden",
+            touchAction: esVideoActual ? "auto" : "none", overflow: "hidden",
           }}
         >
           <div
@@ -290,6 +295,26 @@ export function Visor({ fotos, indice, onCerrar }: {
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
+            {esVideoActual ? (
+              // Sin autoplay a propósito: en el iPhone un vídeo que
+              // arranca solo tiene que ir mudo, y aquí el sonido es
+              // media gracia. Se pulsa play y se oye.
+              <motion.video
+                key={fotos[actual]}
+                src={fotos[actual]}
+                controls
+                playsInline
+                preload="metadata"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.18 }}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: "100%", maxHeight: "100%",
+                  display: "block", outline: "none", borderRadius: 6,
+                }}
+              />
+            ) : (
             <motion.img
               ref={imagen}
               key={fotos[actual]}
@@ -317,6 +342,7 @@ export function Visor({ fotos, indice, onCerrar }: {
                 willChange: "transform",
               }}
             />
+            )}
           </div>
 
           <button
