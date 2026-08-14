@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BCN, type Etapa } from "@/lib/barcelona/types";
 import { Visor, useVisor } from "@/components/barcelona/Visor";
 import { Media } from "@/components/barcelona/Media";
+import { BocadilloOlmo } from "@/components/barcelona/Olmo";
 import type { UserName } from "@/store/userStore";
 
 /* ═══════════════════════════════════════════════════════════
@@ -160,6 +161,13 @@ export function Asistente({ etapa, usuario }: { etapa: Etapa | null; usuario: Us
           }}
         />
       </motion.button>
+
+      {/* Lo que tiene que deciros hoy, saliendo de su propio icono */}
+      <BocadilloOlmo
+        etapaId={etapa?.id ?? null}
+        usuario={usuario}
+        onAbrirChat={() => setAbierto(true)}
+      />
 
       {/* ── El asistente abierto ── */}
       <AnimatePresence>

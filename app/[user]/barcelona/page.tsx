@@ -12,7 +12,6 @@ import {
 } from "@/lib/barcelona/queries";
 import { Fondo, HojaFondos } from "@/components/barcelona/Fondo";
 import { Asistente } from "@/components/barcelona/Asistente";
-import { OlmoHoy } from "@/components/barcelona/Olmo";
 
 /* ═══════════════════════════════════════════════════════════
    Proyecto Barcelona — el índice del capítulo.
@@ -121,9 +120,6 @@ export default function BarcelonaPage() {
             <SinEtapa />
           ) : (
             <>
-              {/* Olmo va primero: es lo único que habla sin que le preguntéis */}
-              <OlmoHoy etapaId={etapa?.id ?? null} onIr={ir} />
-
               {/* Lo próximo */}
               {proximos.length > 0 && (
                 <Proximo momento={proximos[0]} onClick={() => ir("agenda")} />

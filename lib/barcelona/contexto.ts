@@ -68,7 +68,12 @@ export function diasDesde(fecha: string | null): number | null {
  * generados, "completo" para el copiloto (que necesita responder
  * preguntas concretas sobre cualquier cosa).
  */
-export function construirContexto(d: DatosEtapa, detalle: "resumen" | "completo" = "resumen"): string {
+export function construirContexto(
+  d: DatosEtapa,
+  detalle: "resumen" | "completo" = "resumen",
+  /** Fuera lo que no queráis que os saque. La vivienda está apartada. */
+  omitir: { pisos?: boolean } = {}
+): string {
   const completo = detalle === "completo";
   const hoy = new Date().toISOString().slice(0, 10);
   const dias = diasDesde(d.etapa.fecha_llegada);
@@ -137,7 +142,12 @@ export function construirContexto(d: DatosEtapa, detalle: "resumen" | "completo"
   }
 
   // ── Pisos ──
-  if (d.pisos.length > 0) {
+  // Cuando se omiten no se dice nada de ellos, ni siquiera que no hay:
+  // si se dijera "no tienen pisos guardados" acabaría animándoles a
+  // apuntar alguno, que es justo lo contrario de lo que se quiere.
+  if (omitir.pisos) {
+    // nada
+  } else if (d.pisos.length > 0) {
     const porEstado = d.pisos.reduce<Record<string, number>>((acc, x) => {
       acc[x.estado] = (acc[x.estado] ?? 0) + 1;
       return acc;

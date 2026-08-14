@@ -24,10 +24,13 @@ import { urlEsVideo } from "@/lib/upload";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
 
-/** A dónde puede mandaros. Son las carpetas reales de la app. */
+/**
+ * A dónde puede mandaros: solo lo que está en el panel.
+ * La vivienda se quitó de ahí, así que tampoco os manda allí.
+ */
 const SECCIONES = [
   "agenda", "historia", "barrios", "gastos", "mapa",
-  "contactos", "vivienda", "nuestra-barcelona",
+  "contactos", "nuestra-barcelona",
 ] as const;
 type Seccion = (typeof SECCIONES)[number];
 
@@ -48,7 +51,6 @@ Mira todo lo que tienen guardado y quédate con UNA sola cosa, la que hoy tenga 
 - Una diferencia real entre lo que opina cada uno, cuando dice algo interesante de ellos.
 - Cómo va el dinero, si hay algo que llame la atención: el bote bajo, un mes disparado, uno que va muy por delante.
 - La mudanza acercándose con cosas sin cerrar.
-- Un piso favorito que lleva días parado.
 - Un hueco en la agenda que podrían aprovechar.
 
 CÓMO ESCRIBIRLO
@@ -65,6 +67,7 @@ REGLAS DURAS
 2. Si no tienen casi nada guardado, dilo con naturalidad y propón algo pequeño por donde empezar.
 3. No repitas lo que ya dijiste los días anteriores: te paso esos textos justo para eso. Busca otro ángulo.
 4. Las cifras de dinero cópialas tal cual del contexto. No rehagas las cuentas.
+5. Ni una palabra de pisos ni de la búsqueda de vivienda: eso lo tienen apartado. Aquí no toca.
 
 EL JSON
 - "texto": lo que les dices.
@@ -226,7 +229,7 @@ export async function POST(req: NextRequest) {
       ? fotos.map((f, i) => `${i + 1}. ${f.fecha} — ${f.titulo}${f.lugar ? ` (${f.lugar})` : ""}${f.video ? " [VÍDEO]" : ""}`).join("\n")
       : "(no tienen ninguna foto guardada todavía)";
 
-    const contexto = construirContexto(datos, "completo");
+    const contexto = construirContexto(datos, "completo", { pisos: true });
 
     const entrada =
       `ESTADO DEL PROYECTO BARCELONA:\n\n${contexto}\n\n` +
