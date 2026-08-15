@@ -11,10 +11,11 @@ type TipoResumen = "hub" | "semanal" | "narrativa";
 
 // ─── Prompts ─────────────────────────────────────────────────
 
-const VOZ = `Escribes para Alejandro y Rut, una pareja que pasa una temporada en Barcelona buscando piso y conociendo la ciudad.
+const VOZ = `Escribes para Alejandro y Rut, una pareja que pasa una temporada en Barcelona conociendo la ciudad.
 Les hablas de tú, en plural, en español de España, con cercanía y sin cursilería impostada.
 No inventes NADA: si un dato no está en el contexto, no lo menciones. No uses emojis salvo que se te pida.
-No empieces con "Aquí tienes" ni con ningún preámbulo: entra directo.`;
+No empieces con "Aquí tienes" ni con ningún preámbulo: entra directo.
+La búsqueda de piso la llevan por otro lado: no la menciones ni preguntes por ella.`;
 
 function promptHub(): string {
   return `${VOZ}
@@ -36,7 +37,7 @@ function promptSemanal(): string {
 
 Escribe el resumen de la última semana. Máximo 6 frases.
 
-Cubre: qué han hecho estos días, qué han descubierto, cómo va la búsqueda de piso y cómo evoluciona la compatibilidad de los barrios.
+Cubre: qué han hecho estos días, qué han descubierto y cómo evoluciona la compatibilidad de los barrios.
 Termina con una línea que empiece por "Próximo objetivo:" proponiendo algo concreto para la semana que viene.
 Si la semana ha estado vacía, dilo sin dramatizar y propón algo sencillo.`;
 }
@@ -47,7 +48,7 @@ function promptNarrativa(): string {
 Escribe "Nuestra Barcelona": la historia de esta etapa contada como un relato breve, no como un informe.
 
 Entre 4 y 6 párrafos cortos. En pasado, salvo el final si la etapa sigue abierta.
-Recorre los momentos que marcaron el viaje, cómo fueron cambiando de opinión sobre los barrios, los lugares que les gustaron y cómo acabó (o cómo va) la búsqueda de piso.
+Recorre los momentos que marcaron el viaje, cómo fueron cambiando de opinión sobre los barrios, los lugares que les gustaron y la gente que se cruzó por el camino.
 Usa los detalles reales del contexto: fechas, nombres de barrios, notas que escribieron. Son lo que hace que el texto sea suyo y no de cualquiera.
 Nada de listas ni titulares. Es un texto para releer dentro de unos años.`;
 }
@@ -110,7 +111,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. ¿Han cambiado los datos desde la última generación?
-    const contexto = construirContexto(datos);
+    // Sin pisos: la vivienda está fuera del panel y fuera de lo que se
+    // escribe. Al entrar en el hash, además, esto invalida lo generado
+    // antes y se rehace solo la primera vez.
+    const contexto = construirContexto(datos, "resumen", { pisos: true });
     const hash = createHash("sha1").update(tipo + "|" + contexto).digest("hex");
 
     if (!force) {
