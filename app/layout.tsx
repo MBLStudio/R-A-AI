@@ -1,11 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit } from "next/font/google";
+import { Outfit, Dancing_Script, Parisienne } from "next/font/google";
 import "./globals.css";
 
 const outfit = Outfit({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700", "800"],
   variable: "--font-outfit",
+  display: "swap",
+});
+
+// Caligrafía para la carta de la Sorpresa
+const dancingScript = Dancing_Script({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-script",
+  display: "swap",
+});
+
+// Script elegante para títulos y firma
+const parisienne = Parisienne({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-script-elegant",
   display: "swap",
 });
 
@@ -38,7 +54,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={outfit.variable}>
+    <html lang="es" className={`${outfit.variable} ${dancingScript.variable} ${parisienne.variable}`}>
       <body style={{ fontFamily: "var(--font-outfit), -apple-system, sans-serif" }}>
         <main style={{ height: "100dvh", overflow: "hidden", position: "relative" }}>
           {children}

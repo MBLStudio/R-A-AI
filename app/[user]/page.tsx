@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { getDailyMessage } from "@/lib/daily-content";
+import { loadSorpresa, type Sorpresa } from "@/lib/sorpresa";
 
 const SHARED_MODULES = [
   { id: "carnet", icon: "💕", title: "Nuestros carnets", description: "Alejandro & Rut · pareja oficial", color: "linear-gradient(135deg, #1C1C1E 0%, #FF2D55 100%)" },
@@ -33,6 +34,11 @@ export default function HomePage() {
   useEffect(() => {
     if (userParam && userParam !== activeUser) setUser(userParam, userParam);
   }, [userParam, activeUser, setUser]);
+
+  const [sorpresa, setSorpresa] = useState<Sorpresa | null>(null);
+  useEffect(() => {
+    loadSorpresa().then(setSorpresa).catch(() => {});
+  }, []);
 
   const isAlejandro = userParam === "alejandro";
   const displayName = isAlejandro ? "Alejandro" : "Rut";
@@ -104,6 +110,48 @@ export default function HomePage() {
             "{dailyMessage}"
           </p>
         </motion.div>
+
+        {/* Sorpresa */}
+        {(isAlejandro || sorpresa?.revelada) && (() => {
+          const rutSinAbrir = !isAlejandro && sorpresa?.revelada && !sorpresa?.abierta_at;
+          const titulo = isAlejandro ? "Sorpresa para Rut" : rutSinAbrir ? "Tienes una sorpresa" : "Tu sorpresa";
+          const sub = isAlejandro
+            ? (sorpresa?.revelada ? "Revelada · toca para editarla" : "Prepárala en secreto 🤫")
+            : (rutSinAbrir ? "Alejandro ha preparado algo para ti" : "Vuelve a leerla 💗");
+          return (
+            <section style={{ marginBottom: 24 }}>
+              <SectionLabel text="Sorpresa" />
+              <motion.button
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1, type: "spring", stiffness: 280, damping: 24 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => router.push(`/${userParam}/sorpresa`)}
+                style={{
+                  width: "100%", background: "linear-gradient(135deg, #7A1231 0%, #C1135A 55%, #FF6B35 100%)",
+                  border: "none", borderRadius: 20, padding: "20px 22px",
+                  display: "flex", alignItems: "center", gap: 16, cursor: "pointer", textAlign: "left",
+                  boxShadow: "0 6px 24px rgba(193,19,90,0.3)",
+                }}
+              >
+                <motion.span
+                  animate={rutSinAbrir ? { rotate: [-8, 8, -8], scale: [1, 1.08, 1] } : {}}
+                  transition={{ duration: 1.8, repeat: Infinity, repeatDelay: 1.5 }}
+                  style={{ fontSize: 34 }}
+                >🎁</motion.span>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: "white", margin: 0, letterSpacing: "-0.3px" }}>{titulo}</p>
+                  <p style={{ fontSize: 12, color: "rgba(255,255,255,0.78)", margin: "2px 0 0" }}>{sub}</p>
+                </div>
+                {rutSinAbrir && (
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "#7A1231", background: "white", borderRadius: 20, padding: "3px 9px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Sin abrir
+                  </span>
+                )}
+                <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 20 }}>›</div>
+              </motion.button>
+            </section>
+          );
+        })()}
 
         {/* Proyecto Barcelona */}
         <motion.button
