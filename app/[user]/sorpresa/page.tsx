@@ -208,11 +208,23 @@ export default function SorpresaPage() {
           </div>
         )}
 
-        {/* Vista previa */}
-        <p style={{ fontSize: 11, fontWeight: 700, color: "#9a7b62", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 10px" }}>
-          Vista previa · gira la carta para ver el reverso
+        {/* Vista previa — las dos caras a la vista (Rut sí tendrá que girar) */}
+        <p style={{ fontSize: 11, fontWeight: 700, color: "#9a7b62", textTransform: "uppercase", letterSpacing: "0.09em", margin: "0 0 6px" }}>
+          Vista previa
         </p>
-        <LetterCard s={preview} height="72dvh" />
+        <p style={{ fontSize: 11, color: "#9a7b62", margin: "0 0 10px", fontStyle: "italic" }}>
+          Frente · lo que Rut ve primero
+        </p>
+        <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: FACE.boxShadow }}>
+          <LetterPaper s={preview} flow />
+        </div>
+
+        <p style={{ fontSize: 11, color: "#9a7b62", margin: "16px 0 10px", fontStyle: "italic" }}>
+          Reverso · lo que descubre al girar la carta
+        </p>
+        <div style={{ borderRadius: 20, overflow: "hidden", position: "relative", boxShadow: FACE.boxShadow }}>
+          <PhotoPaper fotos={preview.fotos} caption={preview.foto_caption} flow />
+        </div>
 
         {/* ─── Editor ─────────────────────────────────────────────────────── */}
         <div style={{ marginTop: 26, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -525,9 +537,9 @@ const FACE_SCROLL: React.CSSProperties = {
 };
 
 /* ─── Frente: la carta ─────────────────────────────────────────────────────── */
-function LetterPaper({ s }: { s: Sorpresa }) {
+function LetterPaper({ s, flow = false }: { s: Sorpresa; flow?: boolean }) {
   return (
-    <div style={{ ...FACE_SCROLL, background: "linear-gradient(160deg, #fffdf7 0%, #fdf3e9 100%)", padding: "30px 22px 28px" }}>
+    <div style={{ ...(flow ? { position: "relative" } : FACE_SCROLL), background: "linear-gradient(160deg, #fffdf7 0%, #fdf3e9 100%)", padding: "30px 22px 28px" }}>
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 5, background: `linear-gradient(90deg, ${GOLD}, ${ROSE}, ${GOLD})` }} />
 
       <div style={{ textAlign: "center", marginBottom: 20, position: "relative", zIndex: 1 }}>
@@ -577,9 +589,9 @@ function LetterPaper({ s }: { s: Sorpresa }) {
 }
 
 /* ─── Reverso: las fotos ───────────────────────────────────────────────────── */
-function PhotoPaper({ fotos, caption }: { fotos: string[]; caption: string }) {
+function PhotoPaper({ fotos, caption, flow = false }: { fotos: string[]; caption: string; flow?: boolean }) {
   return (
-    <div style={{ ...FACE_SCROLL, background: "linear-gradient(160deg, #fdeee2 0%, #f6e0d0 100%)", padding: "30px 22px 30px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+    <div style={{ ...(flow ? { position: "relative" } : FACE_SCROLL), background: "linear-gradient(160deg, #fdeee2 0%, #f6e0d0 100%)", padding: "30px 22px 30px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 5, background: `linear-gradient(90deg, ${GOLD}, ${ROSE}, ${GOLD})` }} />
 
       <div style={{ textAlign: "center" }}>
