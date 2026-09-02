@@ -49,7 +49,6 @@ export default function SorpresaPage() {
   const [fotoCaption, setFotoCaption] = useState("");
 
   const [saving, setSaving] = useState(false);
-  const [revealing, setRevealing] = useState(false);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [showPad, setShowPad] = useState(false);
   const [savingFirma, setSavingFirma] = useState(false);
@@ -76,14 +75,28 @@ export default function SorpresaPage() {
 
   const guardarTexto = async (): Promise<Sorpresa | null> => {
     setSaving(true);
+    // La primera vez que se guarda con carta escrita, queda visible para Rut
+    // y le llega el aviso. Sin botón aparte.
+    const revelarAhora = !!s && !s.revelada && cuerpo.trim().length > 0;
     const updated = await saveSorpresa({
       titulo: titulo.trim(),
       cuerpo,
       firma_nombre: firmaNombre.trim(),
       foto_caption: fotoCaption.trim(),
+      ...(revelarAhora ? { revelada: true, revelada_at: new Date().toISOString() } : {}),
     });
-    if (updated) setS(updated);
-    else alert("No se pudo guardar. ¿Has creado la tabla «sorpresa» en Supabase?");
+    if (updated) {
+      setS(updated);
+      if (revelarAhora) {
+        fetch("/api/push/sorpresa", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "revelada" }),
+        }).catch(() => {});
+      }
+    } else {
+      alert("No se pudo guardar. ¿Has creado la tabla «sorpresa» en Supabase?");
+    }
     setSaving(false);
     return updated;
   };
@@ -119,21 +132,6 @@ export default function SorpresaPage() {
       alert("No se pudo guardar la firma. Inténtalo de nuevo.");
     }
     setSavingFirma(false);
-  };
-
-  const revelar = async () => {
-    if (!cuerpo.trim()) { alert("Escribe primero la carta 💌"); return; }
-    if (!window.confirm("¿Revelar la sorpresa a Rut?\nLe llegará una notificación ahora mismo.")) return;
-    setRevealing(true);
-    await guardarTexto();
-    const updated = await saveSorpresa({ revelada: true, revelada_at: new Date().toISOString() });
-    if (updated) setS(updated);
-    fetch("/api/push/sorpresa", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event: "revelada" }),
-    }).catch(() => {});
-    setRevealing(false);
   };
 
   // ─── Loading ─────────────────────────────────────────────────────────────
@@ -182,7 +180,7 @@ export default function SorpresaPage() {
           <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: 20, fontWeight: 700, color: WINE, margin: 0 }}>Sorpresa 🎁</h1>
             <p style={{ fontSize: 11, color: "#9a7b62", margin: 0 }}>
-              {s.revelada ? "Revelada · Rut ya puede verla" : "Para Rut · en secreto"}
+              {s.revelada ? "Rut ya la ve" : "Para Rut"}
             </p>
           </div>
         </div>
@@ -193,17 +191,17 @@ export default function SorpresaPage() {
         {/* Estado */}
         {s.revelada ? (
           <div style={{ background: "rgba(52,199,89,0.1)", border: "1px solid rgba(52,199,89,0.28)", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#2b8a3e", margin: "0 0 2px" }}>✓ Revelada el {fmtFechaLarga(s.revelada_at)}</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#2b8a3e", margin: "0 0 2px" }}>✓ Rut ya la ve · desde el {fmtFechaLarga(s.revelada_at)}</p>
             <p style={{ fontSize: 12, color: "#3a7d4a", margin: 0 }}>
-              {s.abierta_at ? `Rut la abrió el ${fmtFechaLarga(s.abierta_at)} 💗` : "Rut aún no la ha abierto."}
-              {" "}Tus cambios se guardan y verá siempre la última versión.
+              {s.abierta_at ? `La abrió el ${fmtFechaLarga(s.abierta_at)} 💗` : "Aún no la ha abierto."}
+              {" "}Lo que edites y guardes, lo verá en la última versión.
             </p>
           </div>
         ) : (
           <div style={{ background: `${GOLD}22`, border: `1px solid ${GOLD}66`, borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
             <p style={{ fontSize: 12.5, color: "#7a5c3e", margin: 0, lineHeight: 1.55 }}>
-              La carta ya está escrita abajo — <b>revísala y pulsa Guardar</b>. Añade la foto del tatuaje y tu firma.
-              Cuando esté lista, pulsa <b>Revelar a Rut</b>.
+              La carta ya está escrita abajo. Revísala, firma y añade la foto.
+              <b> En cuanto pulses Guardar, le aparece a Rut en su inicio y le llega un aviso</b> — no hay que hacer nada más. Guarda cuando lo tengas todo listo.
             </p>
           </div>
         )}
@@ -299,37 +297,25 @@ export default function SorpresaPage() {
       </div>
 
       {/* Barra inferior fija */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", background: "rgba(244,236,221,0.96)", backdropFilter: "blur(12px)", borderTop: `1px solid ${GOLD}55`, display: "flex", gap: 10, zIndex: 20 }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, padding: "12px 16px", paddingBottom: "calc(12px + env(safe-area-inset-bottom))", background: "rgba(244,236,221,0.96)", backdropFilter: "blur(12px)", borderTop: `1px solid ${GOLD}55`, zIndex: 20 }}>
         <motion.button
           whileTap={{ scale: 0.96 }}
           onClick={guardarTexto}
           disabled={saving || !dirty}
           style={{
-            flex: 1, padding: "14px", borderRadius: 14, border: "none",
-            fontSize: 14, fontWeight: 700, cursor: dirty && !saving ? "pointer" : "default",
-            background: dirty && !saving ? "white" : "rgba(0,0,0,0.06)",
-            color: dirty && !saving ? WINE : "#b7a68f",
-            boxShadow: dirty && !saving ? "0 2px 10px rgba(0,0,0,0.08)" : "none",
+            width: "100%", padding: "15px", borderRadius: 14, border: "none",
+            fontSize: 15, fontWeight: 800, cursor: dirty && !saving ? "pointer" : "default",
+            background: dirty && !saving ? `linear-gradient(135deg, ${ROSE}, #FF6B35)` : "rgba(0,0,0,0.06)",
+            color: dirty && !saving ? "white" : "#b7a68f",
+            boxShadow: dirty && !saving ? `0 4px 16px ${ROSE}44` : "none",
           }}
         >
-          {saving ? "Guardando…" : dirty ? "Guardar" : "Guardado ✓"}
+          {saving
+            ? "Guardando…"
+            : dirty
+              ? (s.revelada ? "Guardar cambios" : "Guardar · Rut la verá")
+              : (s.revelada ? "Guardado ✓ · Rut la ve" : "Guardado ✓")}
         </motion.button>
-
-        {!s.revelada && (
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={revelar}
-            disabled={revealing}
-            style={{
-              flex: 1.4, padding: "14px", borderRadius: 14, border: "none",
-              fontSize: 14, fontWeight: 800, cursor: revealing ? "default" : "pointer",
-              background: `linear-gradient(135deg, ${ROSE}, #FF6B35)`,
-              color: "white", boxShadow: `0 4px 16px ${ROSE}55`,
-            }}
-          >
-            {revealing ? "Revelando…" : "🎁 Revelar a Rut"}
-          </motion.button>
-        )}
       </div>
 
       <AnimatePresence>
