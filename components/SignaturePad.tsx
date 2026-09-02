@@ -47,37 +47,50 @@ interface SignaturePadProps {
 export function SignaturePad({ onSave, onCancel, saving, theme }: SignaturePadProps) {
   const t = { ...DEFAULTS, ...theme };
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const drawing = useRef(false);
   const [hasStrokes, setHasStrokes] = useState(false);
 
-  // Escala coordenadas CSS → coordenadas internas del canvas
+  // Punto de dibujo en el sistema de coordenadas del contexto.
+  // El contexto ya está escalado por dpr, así que trabajamos en px CSS:
+  // basta con restar el origen del canvas. El factor scaleX/scaleY corrige
+  // cualquier desajuste entre el tamaño con el que se creó el lienzo y el
+  // que tiene ahora en pantalla (≈ 1 en condiciones normales).
   const getPos = (e: TouchEvent | MouseEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const dpr = window.devicePixelRatio || 1;
+    const scaleX = (canvas.width / dpr) / rect.width;
+    const scaleY = (canvas.height / dpr) / rect.height;
     const clientX = "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
     const clientY = "touches" in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
     return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   };
 
-  // Ajusta resolución interna del canvas al tamaño real del wrapper
+  // Ajusta la resolución interna del canvas a su tamaño real en pantalla.
   useEffect(() => {
     const canvas = canvasRef.current;
-    const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
+    if (!canvas) return;
 
-    const { width, height } = wrap.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
+    const setup = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
 
-    const ctx = canvas.getContext("2d")!;
-    ctx.scale(dpr, dpr);
-    ctx.strokeStyle = t.strokeColor;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.strokeStyle = t.strokeColor;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    };
+
+    setup();
+    // Reintento en el siguiente frame por si el panel aún se estaba
+    // desplegando cuando se midió.
+    const raf = requestAnimationFrame(setup);
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -127,12 +140,11 @@ export function SignaturePad({ onSave, onCancel, saving, theme }: SignaturePadPr
   const clear = () => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d"); if (!ctx) return;
+    // Limpia todo el búfer ignorando la transformación dpr activa
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    // Restaurar estilos tras limpiar
-    ctx.strokeStyle = t.strokeColor;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    ctx.restore();
     setHasStrokes(false);
   };
 
@@ -161,7 +173,7 @@ export function SignaturePad({ onSave, onCancel, saving, theme }: SignaturePadPr
           <button onClick={onCancel} style={{ background: `${t.accent}1a`, border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", fontSize: 14, color: t.accent }}>✕</button>
         </div>
 
-        <div ref={wrapRef} style={{ background: "white", borderRadius: 16, border: `2px dashed ${t.accent}4d`, overflow: "hidden", marginBottom: 14, position: "relative", height: 160 }}>
+        <div style={{ background: "white", borderRadius: 16, border: `2px dashed ${t.accent}4d`, overflow: "hidden", marginBottom: 14, position: "relative", height: 160 }}>
           <canvas
             ref={canvasRef}
             style={{ width: "100%", height: "100%", display: "block", touchAction: "none", cursor: "crosshair" }}
