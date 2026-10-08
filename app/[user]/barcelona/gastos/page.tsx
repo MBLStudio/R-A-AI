@@ -163,7 +163,7 @@ export default function GastosPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {/* Lo tuyo */}
-            {loTuyo.total > 0 && <LoTuyo lo={loTuyo} mes={mes} />}
+            {loTuyo.total > 0 && <LoTuyo lo={loTuyo} mes={mes} color={user === "rut" ? BCN.teja : BCN.mar} />}
 
             {/* Quién ha puesto qué */}
             {(balance.total.alejandro > 0 || balance.total.rut > 0) && (
@@ -310,16 +310,19 @@ export default function GastosPage() {
 
 /* ─── Lo tuyo ──────────────────────────────────────────────── */
 
-function LoTuyo({ lo, mes }: { lo: LoDeUno; mes: string }) {
+function LoTuyo({ lo, mes, color }: { lo: LoDeUno; mes: string; color: string }) {
   return (
-    <div style={{ background: "white", borderRadius: 16, border: `1px solid ${BCN.arenaOsc}`, padding: "15px 16px" }}>
+    <div style={{
+      background: "white", borderRadius: 16, border: `1px solid ${BCN.arenaOsc}`,
+      borderTop: `3px solid ${color}`, padding: "15px 16px",
+    }}>
       <p style={{
         fontSize: 10.5, fontWeight: 800, color: BCN.humo, textTransform: "uppercase",
         letterSpacing: "0.1em", margin: 0,
       }}>
         Lo tuyo en {nombreDelMes(mes).toLowerCase()}
       </p>
-      <p style={{ fontFamily: "Georgia, serif", fontSize: 25, color: BCN.tinta, margin: "5px 0 12px", lineHeight: 1.1 }}>
+      <p style={{ fontFamily: "Georgia, serif", fontSize: 25, color, margin: "5px 0 12px", lineHeight: 1.1 }}>
         {euros(lo.total)}
       </p>
 
