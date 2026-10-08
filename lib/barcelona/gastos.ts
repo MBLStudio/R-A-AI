@@ -319,6 +319,48 @@ export function porCategoria(gastos: Gasto[]): { clave: string; total: number }[
     .sort((a, b) => b.total - a.total);
 }
 
+export interface LoDeUno {
+  /** Sus cosas, enteras. */
+  suyo: number;
+  /** La mitad de todo lo común, saliera de donde saliera. */
+  mitadComun: number;
+  total: number;
+  /** En qué se le va, de más a menos, con lo común ya partido. */
+  categorias: { clave: string; total: number }[];
+}
+
+/**
+ * Lo que se ha gastado uno: sus cosas enteras y la mitad de lo común.
+ *
+ * No es lo que ha salido de su cartera —eso es «quién ha puesto qué»—
+ * sino lo que le ha costado de verdad: si Rut adelanta la compra de
+ * los dos, media compra también es gasto de Alejandro.
+ */
+export function loDeUno(gastos: Gasto[], quien: "alejandro" | "rut"): LoDeUno {
+  const suma: Record<string, number> = {};
+  let suyo = 0;
+  let mitadComun = 0;
+
+  for (const g of gastos) {
+    if (g.tipo !== "gasto") continue;
+    if (g.personal && g.pagado_por !== quien) continue;
+
+    const parte = g.personal ? Number(g.importe) : Number(g.importe) / 2;
+    if (g.personal) suyo += parte;
+    else mitadComun += parte;
+    suma[g.categoria] = (suma[g.categoria] ?? 0) + parte;
+  }
+
+  return {
+    suyo,
+    mitadComun,
+    total: suyo + mitadComun,
+    categorias: Object.entries(suma)
+      .map(([clave, total]) => ({ clave, total }))
+      .sort((a, b) => b.total - a.total),
+  };
+}
+
 /** Los meses que tienen algo apuntado, del más nuevo al más viejo. */
 export function mesesConMovimiento(gastos: Gasto[]): string[] {
   const meses = new Set(gastos.map((g) => g.fecha.slice(0, 7)));

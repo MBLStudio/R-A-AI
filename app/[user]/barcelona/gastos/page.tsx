@@ -8,10 +8,10 @@ import { BCN, type Etapa } from "@/lib/barcelona/types";
 import {
   getBotes, addBote, getGastos, addGasto, updateGasto, deleteGasto,
   getFijos, addFijo, updateFijo, deleteFijo, apuntarFijosPendientes,
-  saldoDelBote, calcularBalance, porCategoria,
+  saldoDelBote, calcularBalance, porCategoria, loDeUno,
   mesesConMovimiento, nombreDelMes, delMes,
   categoria, CATEGORIAS, euros, eurosCorto,
-  type Bote, type Gasto, type GastoFijo, type FormaPago, type Medio,
+  type Bote, type Gasto, type GastoFijo, type FormaPago, type Medio, type LoDeUno,
 } from "@/lib/barcelona/gastos";
 import { getEtapaActiva, hoyISO } from "@/lib/barcelona/queries";
 import { avisar } from "@/lib/barcelona/avisar";
@@ -75,6 +75,8 @@ export default function GastosPage() {
   // reinicia en enero. El resto sí se mira mes a mes.
   const balance = useMemo(() => calcularBalance(delMesElegido), [delMesElegido]);
   const categorias = useMemo(() => porCategoria(delMesElegido), [delMesElegido]);
+  // Lo de quien está mirando: sus cosas, que no salen en el reparto
+  const loTuyo = useMemo(() => loDeUno(delMesElegido, user), [delMesElegido, user]);
   const gastadoEnElMes = useMemo(
     () => delMesElegido.filter((g) => g.tipo === "gasto" && !g.personal).reduce((t, g) => t + Number(g.importe), 0),
     [delMesElegido]
@@ -92,7 +94,7 @@ export default function GastosPage() {
   return (
     <Pantalla
       titulo="Gastos"
-      subtitulo={gastos.length > 0 ? `${eurosCorto(gastadoEnElMes)} en ${nombreDelMes(mes).toLowerCase()}` : "La caja común"}
+      subtitulo={gastos.length > 0 ? `${eurosCorto(gastadoEnElMes)} en común · ${nombreDelMes(mes).toLowerCase()}` : "La caja común"}
       color={BCN.oliva}
       accion={{
         icon: IconoMas,
@@ -159,10 +161,15 @@ export default function GastosPage() {
             </button>
           </div>
 
-          {/* Quién ha puesto qué */}
-          {(balance.total.alejandro > 0 || balance.total.rut > 0) && (
-            <QuienHaPuesto balance={balance} />
-          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Lo tuyo */}
+            {loTuyo.total > 0 && <LoTuyo lo={loTuyo} mes={mes} />}
+
+            {/* Quién ha puesto qué */}
+            {(balance.total.alejandro > 0 || balance.total.rut > 0) && (
+              <QuienHaPuesto balance={balance} />
+            )}
+          </div>
 
           {/* Movimientos o fijos */}
           <div style={{ display: "flex", gap: 7, margin: "18px 0 14px" }}>
@@ -301,6 +308,35 @@ export default function GastosPage() {
   );
 }
 
+/* ─── Lo tuyo ──────────────────────────────────────────────── */
+
+function LoTuyo({ lo, mes }: { lo: LoDeUno; mes: string }) {
+  return (
+    <div style={{ background: "white", borderRadius: 16, border: `1px solid ${BCN.arenaOsc}`, padding: "15px 16px" }}>
+      <p style={{
+        fontSize: 10.5, fontWeight: 800, color: BCN.humo, textTransform: "uppercase",
+        letterSpacing: "0.1em", margin: 0,
+      }}>
+        Lo tuyo en {nombreDelMes(mes).toLowerCase()}
+      </p>
+      <p style={{ fontFamily: "Georgia, serif", fontSize: 25, color: BCN.tinta, margin: "5px 0 12px", lineHeight: 1.1 }}>
+        {euros(lo.total)}
+      </p>
+
+      {lo.categorias.length > 1 && <EnQueSeVa categorias={lo.categorias} margen={0} />}
+
+      {lo.suyo > 0 && lo.mitadComun > 0 && (
+        <p style={{
+          fontSize: 12, color: BCN.humo, margin: "11px 0 0", paddingTop: 9,
+          borderTop: `1px solid ${BCN.arena}`, lineHeight: 1.5,
+        }}>
+          Tus cosas {euros(lo.suyo)} · tu mitad de lo común {euros(lo.mitadComun)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Quién ha puesto qué ──────────────────────────────────── */
 
 function QuienHaPuesto({ balance }: { balance: ReturnType<typeof calcularBalance> }) {
@@ -377,12 +413,12 @@ function QuienHaPuesto({ balance }: { balance: ReturnType<typeof calcularBalance
 
 /* ─── En qué se va ─────────────────────────────────────────── */
 
-function EnQueSeVa({ categorias }: { categorias: { clave: string; total: number }[] }) {
+function EnQueSeVa({ categorias, margen = 18 }: { categorias: { clave: string; total: number }[]; margen?: number }) {
   const total = categorias.reduce((t, c) => t + c.total, 0);
   if (total <= 0) return null;
 
   return (
-    <div style={{ marginBottom: 18 }}>
+    <div style={{ marginBottom: margen }}>
       <div style={{ display: "flex", height: 9, borderRadius: 5, overflow: "hidden", gap: 1.5 }}>
         {categorias.map((c) => (
           <div
