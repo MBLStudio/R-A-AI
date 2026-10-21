@@ -8,13 +8,15 @@ import {
 /* ============================================================
    «Mañana trabajas de 10:00 a 18:00».
 
-   Cada noche a las 23:00 (hora de Madrid) le llega a cada uno
-   su horario del día siguiente. Solo si hay algo apuntado.
+   Cada noche, entre las 22:00 y las 23:00 (hora de Madrid), le
+   llega a cada uno su horario del día siguiente. Solo si hay
+   algo apuntado. El minuto exacto lo decide Vercel: en el plan
+   gratuito solo garantiza la hora.
 
    Vercel programa los crons en UTC y España cambia de hora:
-   a las 23:00 de Madrid son las 21:00 UTC en verano y las
-   22:00 UTC en invierno. Por eso el cron salta a las dos horas
-   y aquí solo se envía en la que de verdad son las 23 en Madrid.
+   las 22:00 de Madrid son las 20:00 UTC en verano y las 21:00
+   UTC en invierno. Por eso el cron salta a las dos horas y aquí
+   solo se envía en la que de verdad son las 22 en Madrid.
    ============================================================ */
 
 webpush.setVapidDetails(
@@ -36,8 +38,8 @@ export async function GET(req: NextRequest) {
 
   // ?probar=1 se salta la comprobación de la hora, para probarlo a mano
   const probar = req.nextUrl.searchParams.get("probar") === "1";
-  if (!probar && horaEnMadrid() !== 23) {
-    return NextResponse.json({ sent: 0, motivo: "no son las 23 en Madrid" });
+  if (!probar && horaEnMadrid() !== 22) {
+    return NextResponse.json({ sent: 0, motivo: "no son las 22 en Madrid" });
   }
 
   const hoy = hoyMadrid();
