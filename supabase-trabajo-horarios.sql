@@ -10,12 +10,20 @@
 -- ============================================================
 
 INSERT INTO trabajo_turnos (user_name, fecha, tipo, tramos, nota) VALUES
+  -- Semana del 13 al 18 de octubre · 25 h (empezó el martes 13)
+  ('rut', '2026-10-13', 'trabajo', '[{"inicio":"14:30","fin":"20:30"}]', NULL),
+  ('rut', '2026-10-14', 'trabajo', '[{"inicio":"13:15","fin":"21:15"}]', NULL),
+  ('rut', '2026-10-15', 'trabajo', '[{"inicio":"14:30","fin":"20:30"}]', NULL),
+  ('rut', '2026-10-16', 'libre',   '[]', NULL),
+  ('rut', '2026-10-17', 'trabajo', '[{"inicio":"10:00","fin":"15:00"}]', NULL),
+  ('rut', '2026-10-18', 'libre',   '[]', NULL),
+
   -- Semana del 19 al 25 de octubre · 30 h
   ('rut', '2026-10-19', 'trabajo', '[{"inicio":"10:00","fin":"15:00"}]', NULL),
   ('rut', '2026-10-20', 'trabajo', '[{"inicio":"10:00","fin":"18:00"}]', 'Pausa 13:30–14:00'),
   ('rut', '2026-10-21', 'libre',   '[]', NULL),
   ('rut', '2026-10-22', 'trabajo', '[{"inicio":"10:00","fin":"15:00"}]', 'Pausa 13:30–14:00'),
-  ('rut', '2026-10-23', 'trabajo', '[{"inicio":"14:00","fin":"21:00"}]', 'Pausa 18:00–18:30'),
+  ('rut', '2026-10-23', 'trabajo', '[{"inicio":"14:15","fin":"21:15"}]', 'Pausa 18:00–18:30'),
   ('rut', '2026-10-24', 'trabajo', '[{"inicio":"11:00","fin":"16:00"}]', NULL),
   ('rut', '2026-10-25', 'libre',   '[]', NULL),
 
@@ -83,7 +91,7 @@ ON CONFLICT (user_name, fecha) DO UPDATE SET
   updated_at = NOW();
 
 -- Comprobación: horas por semana y persona
---   Rut: 30 · 30 · 27 · 29,5
+--   Rut: 25 · 30 · 30 · 27 · 29,5
 --   Alejandro: 39 (31 la semana del 2 nov, 23 la del 7 dic, 32 la del 21 dic
 --              y 32 la del 28 dic, que solo llega hasta el jueves 31)
 SELECT
