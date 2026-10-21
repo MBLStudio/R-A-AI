@@ -22,6 +22,7 @@ const SIN_SESION = [
   "/api/auth/",
   "/api/db",                 // devuelve 401 JSON por su cuenta
   "/api/push/daily",         // cron (Bearer CRON_SECRET)
+  "/api/push/horario",       // cron (Bearer CRON_SECRET)
   "/api/cartas/check",       // cron (Bearer CRON_SECRET)
   "/api/barcelona/pisos",    // extensión (Bearer BARCELONA_INGEST_TOKEN)
 ];

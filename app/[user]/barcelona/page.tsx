@@ -31,6 +31,7 @@ const SECCIONES: { titulo: string; filas: Fila[] }[] = [
     titulo: "El viaje",
     filas: [
       { id: "agenda",   titulo: "Calendario",      sub: "Día a día, lo que hay planeado", icon: "📅", color: BCN.mar },
+      { id: "trabajo",  titulo: "Trabajo",         sub: "Los horarios de los dos y las ventas", icon: "💼", color: BCN.noche },
       { id: "historia", titulo: "Nuestra historia", sub: "Lo que ya habéis vivido",        icon: "📖", color: BCN.teja },
     ],
   },
