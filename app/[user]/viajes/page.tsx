@@ -151,7 +151,7 @@ export default function ViajesPage() {
 
   const enterChat = async () => {
     const budgetText = budget ? `Presupuesto por persona: ${budget}.` : "Presupuesto abierto por ahora.";
-    const firstMsg = `Queremos planificar un viaje a ${selectedNames.join(", ")}. ${budgetText} Somos una pareja — Alejandro está en Rovereto (Italia) y Rut en España. Ayúdanos a construir el plan perfecto: vuelos desde ambas ciudades, mejor época para ir, alojamiento recomendado, qué ver y hacer, coste real estimado y viabilidad del presupuesto. ¡Empezamos!`;
+    const firstMsg = `Queremos planificar un viaje a ${selectedNames.join(", ")}. ${budgetText} Somos una pareja y vivimos en Barcelona. Ayúdanos a construir el plan perfecto: vuelos o trenes desde Barcelona, mejor época para ir, alojamiento recomendado, qué ver y hacer, coste real estimado y viabilidad del presupuesto. ¡Empezamos!`;
 
     const userMessage: Message = { role: "user", content: firstMsg };
     setMessages([userMessage]);

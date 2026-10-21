@@ -11,12 +11,12 @@ webpush.setVapidDetails(
 const MESSAGES = {
   beso: (from: string) => ({
     title: `${from === "alejandro" ? "Alejandro" : "Rut"} te manda un beso 💋`,
-    body: "Para que el tiempo pase un poco más rápido 🥹💗",
+    body: "Va por adelantado. El de verdad, esta noche 💗",
     tag: "carino-beso",
   }),
   abrazo: (from: string) => ({
     title: `${from === "alejandro" ? "Alejandro" : "Rut"} te manda un abrazo 🤗`,
-    body: "Para que sientas que está ahí, aunque sea de lejos 💗",
+    body: "Guárdalo hasta que te lo dé en persona 🥹💗",
     tag: "carino-abrazo",
   }),
 };

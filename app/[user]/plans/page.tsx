@@ -36,7 +36,7 @@ interface Rating {
 
 // ─── Form options ─────────────────────────────────────────────
 const OCCASIONS = ["Día tranquilo", "Aniversario", "Sorpresa", "Primera cita", "Después del trabajo", "Fin de semana", "Celebración", "Sin motivo especial"];
-const LOCATIONS = ["Rovereto / Italia", "Palencia", "Barcelona", "En casa", "Viaje espontáneo", "Otro"];
+const LOCATIONS = ["Barcelona", "En casa", "Escapada cerca", "Palencia", "Viaje espontáneo", "Otro"];
 const BUDGETS = ["Sin gastar nada", "Menos de 20€", "20€ – 50€", "50€ – 100€", "Sin límite"];
 const DURATIONS = ["1–2 horas", "Tarde entera", "Día completo", "Fin de semana"];
 const MOODS = ["Romántico y tranquilo", "Activo y aventurero", "Íntimo en casa", "Cultural", "Gastronómico", "Sorpréndeme"];
@@ -64,8 +64,9 @@ export default function PlansPage() {
     setStep("loading");
 
     const systemPrompt = `Eres la IA de planes de pareja de R&A. Generas exactamente 3 planes creativos y específicos para Alejandro y Rut.
-Alejandro: 20 años, emprendedor tech, Erasmus en Rovereto Italia. Le gustan los planes con actividad.
-Rut: Psicóloga, TFG. Calmada, romántica. Le gustan los planes tranquilos y especiales.
+Alejandro: 20 años, emprendedor tech. Le gustan los planes con actividad.
+Rut: Psicología, TFG; trabaja en una tienda de gafas con turnos semanales. Calmada, romántica. Le gustan los planes tranquilos y especiales.
+Viven los dos en Barcelona, se ven a diario y están buscando piso para vivir juntos.
 Aniversario: 30 de marzo.
 
 Devuelve EXACTAMENTE este JSON (array de 3 objetos), sin texto adicional:
@@ -133,27 +134,27 @@ Genera 3 planes perfectos y diferentes entre sí: uno más económico/tranquilo,
       setPlans([
         {
           title: "Cena romántica en casa",
-          description: "Una velada íntima cocinando juntos con velas y música italiana.",
-          steps: ["Comprad ingredientes para una receta italiana", "Cocináis juntos con música de fondo", "Cena a la luz de las velas con una película después"],
+          description: "Una velada íntima cocinando juntos, con velas y vuestra música.",
+          steps: ["Comprad en el mercado del barrio lo de una receta nueva", "Cocináis juntos con música de fondo", "Cena a la luz de las velas con una película después"],
           cost: "15–20€",
           duration: "3–4 horas",
           why: "Íntimo para Rut, creativo para Alejandro. Sin salir de casa pero especial."
         },
         {
-          title: "Paseo al lago + aperitivo",
-          description: "Tarde tranquila en el Lago di Garda terminando con aperitivo italiano.",
-          steps: ["Coche hasta el Lago di Garda (45 min)", "Paseo por la orilla al atardecer", "Aperitivo en un bar con vistas"],
-          cost: "25–35€",
+          title: "Atardecer en los Búnkers del Carmel",
+          description: "Subid con algo de picar y ved cómo se enciende Barcelona a vuestros pies.",
+          steps: ["Comprad algo de picar y bebida por el camino", "Subid a los Búnkers un rato antes del atardecer", "Bajad a cenar algo sencillo por Gràcia"],
+          cost: "15–25€",
           duration: "Tarde entera",
-          why: "El lago es perfecto para los planes tranquilos que le gustan a Rut y la aventura que disfruta Alejandro."
+          why: "Tranquilo y romántico para Rut, con su punto de aventura para Alejandro."
         },
         {
-          title: "Escapada sorpresa a Verona",
-          description: "La ciudad del amor a una hora — perfecto para un día completo memorable.",
-          steps: ["Tren a Verona por la mañana", "Arena di Verona y casco antiguo", "Cena en trattoria local", "Tren de vuelta por la noche"],
-          cost: "60–80€",
+          title: "Escapada sorpresa a Sitges",
+          description: "Tren de 40 minutos y un día entero de mar, casco antiguo y cena con vistas.",
+          steps: ["Rodalies R2 Sud desde Passeig de Gràcia o Sants", "Paseo por el casco antiguo y la iglesia sobre el mar", "Playa o calas tranquilas", "Cena frente al mar y tren de vuelta"],
+          cost: "50–70€",
           duration: "Día completo",
-          why: "Verona + sorpresa = recuerdo eterno. Romántico para Rut, aventura cultural para Alejandro."
+          why: "Un día libre de Rut convertido en mini-vacaciones sin coger ni un avión."
         }
       ]);
       setCurrentPlanIndex(0);
