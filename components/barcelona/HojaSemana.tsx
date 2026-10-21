@@ -28,11 +28,10 @@ function desdeTurno(t: Turno | undefined): DiaForm {
   return t ? { tipo: t.tipo, tramos: t.tramos, nota: t.nota } : VACIO;
 }
 
-export function HojaSemana({ abierta, persona, lunes, turnos, onCerrar, onGuardado }: {
+export function HojaSemana({ abierta, persona, lunes, onCerrar, onGuardado }: {
   abierta: boolean;
   persona: Persona;
   lunes: string;
-  turnos: Turno[];
   onCerrar: () => void;
   onGuardado: () => void;
 }) {
@@ -43,12 +42,22 @@ export function HojaSemana({ abierta, persona, lunes, turnos, onCerrar, onGuarda
   const [error, setError] = useState<string | null>(null);
 
   // Al abrir, parte de lo que ya está guardado esa semana
+  // Lo guardado esa semana: se lee al abrir, sea cual sea la vista desde la que se llega
+  const [turnos, setTurnos] = useState<Turno[]>([]);
+
   useEffect(() => {
     if (!abierta) return;
-    setForm(Object.fromEntries(dias.map((f) => [f, desdeTurno(turnos.find((t) => t.fecha === f))])));
     setError(null);
+    setForm({});
+    let vigente = true;
+    getTurnos(persona, lunes, sumarDias(lunes, 6)).then((t) => {
+      if (!vigente) return;
+      setTurnos(t);
+      setForm(Object.fromEntries(dias.map((f) => [f, desdeTurno(t.find((x) => x.fecha === f))])));
+    });
+    return () => { vigente = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abierta, lunes]);
+  }, [abierta, lunes, persona]);
 
   const cambiar = (fecha: string, d: Partial<DiaForm>) =>
     setForm((prev) => ({ ...prev, [fecha]: { ...(prev[fecha] ?? VACIO), ...d } }));

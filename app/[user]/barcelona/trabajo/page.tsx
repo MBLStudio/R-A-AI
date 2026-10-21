@@ -6,20 +6,22 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUserStore, UserName } from "@/store/userStore";
 import { BCN } from "@/lib/barcelona/types";
 import {
-  PERSONAS, TIPO_DIA, hoyMadrid, horaMadrid, lunesDe, sumarDias, diasDeSemana,
-  fechaCorta, rangoSemana, limitesMes, aMinutos, minutosTurno, textoHoras, totalVentas, euros, resumenMes,
+  PERSONAS, TIPO_DIA, hoyMadrid, horaMadrid, lunesDe, sumarDias, sumarMeses, diasDeSemana,
+  fechaCorta, fechaLarga, rangoSemana, mesYAno, limitesMes, limitesAno, rejillaMes,
+  aMinutos, minutosTurno, textoHoras, totalVentas, euros, resumenMes,
   getTurnos, getProximoTurno, getVentas,
-  type Persona, type Turno, type Venta, type Tramo,
+  type Persona, type Turno, type Venta, type Tramo, type Vista,
 } from "@/lib/barcelona/trabajo";
 import { Pantalla, Tarjeta, Selector } from "@/components/barcelona/Shell";
 import { DiaTrabajo } from "@/components/barcelona/DiaTrabajo";
+import { VistaMes, VistaAno } from "@/components/barcelona/CalendarioTrabajo";
 import { HojaTurno } from "@/components/barcelona/HojaTurno";
 import { HojaSemana } from "@/components/barcelona/HojaSemana";
 import { HojaVenta } from "@/components/barcelona/HojaVenta";
 
 /* ═══════════════════════════════════════════════════════════
-   Trabajo — el horario de la semana, de un vistazo.
-   Lo primero es saber cuándo se trabaja; las ventas van en
+   Trabajo — el horario de un vistazo, por día, semana, mes o
+   año. Lo primero es saber cuándo se trabaja; las ventas van en
    segundo plano, dentro de cada día al desplegarlo.
    ═══════════════════════════════════════════════════════════ */
 
@@ -30,6 +32,35 @@ const IconoSemana = (
     <path d="M7.5 14.5h2M11 14.5h2M14.5 14.5h2M7.5 17.5h2M11 17.5h2" stroke="white" strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
+
+const VISTAS: { valor: Vista; label: string }[] = [
+  { valor: "dia", label: "Día" },
+  { valor: "semana", label: "Semana" },
+  { valor: "mes", label: "Mes" },
+  { valor: "ano", label: "Año" },
+];
+
+const CLAVE_VISTA = "ra-trabajo-vista";
+
+/** Los días que abarca cada vista alrededor de la fecha ancla. */
+function rangoDe(vista: Vista, ancla: string): { desde: string; hasta: string } {
+  if (vista === "dia") return { desde: ancla, hasta: ancla };
+  if (vista === "semana") {
+    const l = lunesDe(ancla);
+    return { desde: l, hasta: sumarDias(l, 6) };
+  }
+  if (vista === "mes") {
+    // La rejilla entera, para pintar también los días de los meses vecinos
+    const dias = rejillaMes(ancla);
+    return { desde: dias[0], hasta: dias[dias.length - 1] };
+  }
+  return limitesAno(ancla);
+}
+
+/** Los días que cuentan para los totales (en el mes, sin los vecinos). */
+function periodoDe(vista: Vista, ancla: string): { desde: string; hasta: string } {
+  return vista === "mes" ? limitesMes(ancla) : rangoDe(vista, ancla);
+}
 
 export default function TrabajoPage() {
   const params = useParams();
@@ -46,8 +77,10 @@ export default function TrabajoPage() {
     PERSONAS.some((p) => p.id === user) ? (user as Persona) : PERSONAS[0].id
   );
   const config = PERSONAS.find((p) => p.id === persona) ?? PERSONAS[0];
+  const conVentas = config.ventas;
 
-  const [lunes, setLunes] = useState(() => lunesDe(hoyMadrid()));
+  const [vista, setVista] = useState<Vista>("semana");
+  const [ancla, setAncla] = useState(() => hoyMadrid());
   const [direccion, setDireccion] = useState(0);
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [ventas, setVentas] = useState<Venta[]>([]);
@@ -56,30 +89,48 @@ export default function TrabajoPage() {
   const [proximo, setProximo] = useState<Turno | null>(null);
   const [cargando, setCargando] = useState(true);
 
-  // El día desplegado en la lista (hoy, al entrar) y el día cuyo horario se edita en la hoja
+  // El día desplegado en la semana (hoy, al entrar) y el día cuyo horario se edita en la hoja
   const [desplegado, setDesplegado] = useState<string | null>(() => hoyMadrid());
   const [diaAbierto, setDiaAbierto] = useState<string | null>(null);
   const [rellenando, setRellenando] = useState(false);
   const [ventaAbierta, setVentaAbierta] = useState<{ fecha: string; venta: Venta | null } | null>(null);
 
-  const dias = diasDeSemana(lunes);
-  const esEstaSemana = dias.includes(hoy);
-  // El mes del resumen: el de hoy si se ve esta semana; si no, el de la semana que se mira
-  const mes = limitesMes(esEstaSemana ? hoy : sumarDias(lunes, 3));
+  // La última vista elegida se recuerda en este móvil
+  useEffect(() => {
+    try {
+      const guardada = localStorage.getItem(CLAVE_VISTA) as Vista | null;
+      if (guardada && VISTAS.some((v) => v.valor === guardada)) setVista(guardada);
+    } catch { /* sin almacenamiento: se queda en semana */ }
+  }, []);
+
+  const elegirVista = (v: Vista) => {
+    if (v === vista) return;
+    setCargando(true);
+    setDireccion(0);
+    setVista(v);
+    if (v === "semana") setDesplegado(ancla);
+    try { localStorage.setItem(CLAVE_VISTA, v); } catch { /* da igual */ }
+  };
+
+  const { desde, hasta } = rangoDe(vista, ancla);
+  const periodo = periodoDe(vista, ancla);
+  const lunes = lunesDe(ancla);
+  const esActual = hoy >= periodo.desde && hoy <= periodo.hasta;
+  // El mes del resumen de ventas: el de hoy si cae en lo que se ve; si no, el de lo que se ve
+  const mes = limitesMes(vista === "semana" ? (esActual ? hoy : sumarDias(lunes, 3)) : ancla);
   const { desde: mesDesde, hasta: mesHasta } = mes;
-  const conVentas = config.ventas;
+  const conResumenMes = conVentas && (vista === "semana" || vista === "mes");
 
   // Si se cambia de semana muy rápido, solo vale la última respuesta
   const peticion = useRef(0);
 
   const cargar = useCallback(async () => {
     const n = ++peticion.current;
-    const domingo = sumarDias(lunes, 6);
     const sinVentas = Promise.resolve([] as Venta[]);
     const [t, v, vm, th, px] = await Promise.all([
-      getTurnos(persona, lunes, domingo),
-      conVentas ? getVentas(persona, lunes, domingo) : sinVentas,
-      conVentas ? getVentas(persona, mesDesde, mesHasta) : sinVentas,
+      getTurnos(persona, desde, hasta),
+      conVentas ? getVentas(persona, desde, hasta) : sinVentas,
+      conResumenMes ? getVentas(persona, mesDesde, mesHasta) : sinVentas,
       getTurnos(persona, hoy, hoy),
       getProximoTurno(persona, hoy),
     ]);
@@ -90,32 +141,41 @@ export default function TrabajoPage() {
     setTurnoHoy(th[0] ?? null);
     setProximo(px);
     setCargando(false);
-  }, [persona, lunes, mesDesde, mesHasta, conVentas, hoy]);
+  }, [persona, desde, hasta, mesDesde, mesHasta, conVentas, conResumenMes, hoy]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const mover = (d: number) => {
-    const l = sumarDias(lunes, 7 * d);
-    setDireccion(d);
-    setCargando(true);
-    setLunes(l);
-    // En la semana de hoy se despliega hoy; en las demás, ninguno
-    setDesplegado(diasDeSemana(l).includes(hoy) ? hoy : null);
+  /** Ir a otra fecha, en la vista que se quiera. */
+  const irA = (fecha: string, v: Vista = vista) => {
+    setDireccion(fecha < ancla ? -1 : fecha > ancla ? 1 : 0);
+    if (fecha !== ancla || v !== vista) setCargando(true);
+    setAncla(fecha);
+    if (v !== vista) {
+      setVista(v);
+      try { localStorage.setItem(CLAVE_VISTA, v); } catch { /* da igual */ }
+    }
+    // En la semana queda desplegado el día al que se ha ido
+    setDesplegado(fecha);
   };
 
-  const irAHoy = () => {
-    setDesplegado(hoy);
-    const l = lunesDe(hoy);
-    if (l === lunes) return;
-    setDireccion(l < lunes ? -1 : 1);
+  const mover = (d: number) => {
+    const destino =
+      vista === "dia" ? sumarDias(ancla, d) :
+      vista === "semana" ? sumarDias(ancla, 7 * d) :
+      vista === "mes" ? sumarMeses(ancla, d) :
+      sumarMeses(ancla, 12 * d);
+    setDireccion(d);
     setCargando(true);
-    setLunes(l);
+    setAncla(destino);
+    setDesplegado(diasDeSemana(lunesDe(destino)).includes(hoy) ? hoy : null);
   };
+
+  const irAHoy = () => irA(hoy);
 
   const turnoDe = (f: string) => turnos.find((t) => t.fecha === f) ?? (f === hoy ? turnoHoy : null);
   const ventasDe = (f: string) => ventas.filter((v) => v.fecha === f);
 
-  /** Para un día nuevo, los tramos del día de trabajo más cercano de esa semana. */
+  /** Para un día nuevo, los tramos del día de trabajo más cercano. */
   const sugerencia = useMemo<Tramo[]>(() => {
     if (!diaAbierto) return [];
     const trabajo = turnos.filter((t) => t.tipo === "trabajo");
@@ -123,13 +183,14 @@ export default function TrabajoPage() {
     return (antes ?? trabajo.find((t) => t.fecha > diaAbierto))?.tramos ?? [];
   }, [diaAbierto, turnos]);
 
-  const minutosSemana = turnos.reduce((s, t) => s + minutosTurno(t), 0);
-  const diasTrabajo = turnos.filter((t) => t.tipo === "trabajo").length;
+  // Totales de lo que se ve (en el mes, sin los días de los meses vecinos)
+  const enPeriodo = (f: string) => f >= periodo.desde && f <= periodo.hasta;
+  const turnosPeriodo = turnos.filter((t) => enPeriodo(t.fecha));
+  const ventasPeriodo = ventas.filter((v) => enPeriodo(v.fecha));
+  const minutosPeriodo = turnosPeriodo.reduce((s, t) => s + minutosTurno(t), 0);
+  const diasTrabajo = turnosPeriodo.filter((t) => t.tipo === "trabajo").length;
 
-  const etiquetaSemana =
-    esEstaSemana ? "Esta semana" :
-    lunes === sumarDias(lunesDe(hoy), -7) ? "La semana pasada" :
-    lunes === sumarDias(lunesDe(hoy), 7) ? "La semana que viene" : "";
+  const { titulo, etiqueta } = cabecera(vista, ancla, hoy);
 
   return (
     <>
@@ -156,56 +217,61 @@ export default function TrabajoPage() {
             hoy={hoy}
             turno={turnoHoy}
             proximo={proximo}
-            conVentas={config.ventas}
-            onAbrir={irAHoy}
+            conVentas={conVentas}
+            onAbrir={() => irA(hoy, vista === "dia" || vista === "semana" ? vista : "semana")}
             onVenta={() => setVentaAbierta({ fecha: hoy, venta: null })}
           />
         ) : (
           <div style={{ height: 96, borderRadius: 18, background: BCN.arenaOsc, opacity: 0.5 }} />
         )}
 
-        {/* Navegación de semanas */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "20px 0 12px" }}>
+        {/* Día · Semana · Mes · Año */}
+        <SelectorVista valor={vista} onChange={elegirVista} />
+
+        {/* Navegación */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 12px" }}>
           <BotonFlecha izquierda onClick={() => mover(-1)} />
           <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
-            <p style={{ fontFamily: "Georgia, serif", fontSize: 18, color: BCN.tinta, margin: 0, lineHeight: 1.2 }}>
-              {rangoSemana(lunes)}
+            <p style={{ fontFamily: "Georgia, serif", fontSize: 18, color: BCN.tinta, margin: 0, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {titulo}
             </p>
-            <p style={{ fontSize: 11.5, color: BCN.humo, margin: "2px 0 0", minHeight: 14 }}>{etiquetaSemana}</p>
+            <p style={{ fontSize: 11.5, color: BCN.humo, margin: "2px 0 0", minHeight: 14 }}>{etiqueta}</p>
           </div>
           <BotonFlecha onClick={() => mover(1)} />
-          <button onClick={irAHoy} disabled={esEstaSemana}
+          <button onClick={irAHoy} disabled={esActual}
             style={{
-              padding: "8px 13px", borderRadius: 18, border: `1px solid ${esEstaSemana ? BCN.arenaOsc : BCN.teja}`,
-              background: esEstaSemana ? "transparent" : BCN.teja, color: esEstaSemana ? BCN.humo : "white",
-              fontSize: 13, fontWeight: 700, cursor: esEstaSemana ? "default" : "pointer", flexShrink: 0,
+              padding: "8px 13px", borderRadius: 18, border: `1px solid ${esActual ? BCN.arenaOsc : BCN.teja}`,
+              background: esActual ? "transparent" : BCN.teja, color: esActual ? BCN.humo : "white",
+              fontSize: 13, fontWeight: 700, cursor: esActual ? "default" : "pointer", flexShrink: 0,
               transition: "all 0.15s",
             }}>
             Hoy
           </button>
         </div>
 
-        {/* Resumen de la semana */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <Dato
-            valor={cargando ? "–" : textoHoras(minutosSemana)}
-            label={diasTrabajo === 1 ? "1 día de trabajo" : `${diasTrabajo} días de trabajo`}
-            color={BCN.mar}
-            flex={1.25}
-          />
-          {config.ventas && (
+        {/* Resumen de lo que se ve */}
+        {vista !== "dia" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
             <Dato
-              valor={cargando ? "–" : euros(totalVentas(ventas))}
-              label={ventas.length === 1 ? "1 venta" : `${ventas.length} ventas`}
-              color={BCN.tinta}
-              flex={1}
-              pequeno
+              valor={cargando ? "–" : textoHoras(minutosPeriodo)}
+              label={diasTrabajo === 1 ? "1 día de trabajo" : `${diasTrabajo} días de trabajo`}
+              color={BCN.mar}
+              flex={1.25}
             />
-          )}
-        </div>
+            {conVentas && (
+              <Dato
+                valor={cargando ? "–" : euros(totalVentas(ventasPeriodo))}
+                label={ventasPeriodo.length === 1 ? "1 venta" : `${ventasPeriodo.length} ventas`}
+                color={BCN.tinta}
+                flex={1}
+                pequeno
+              />
+            )}
+          </div>
+        )}
 
         {/* Semana vacía */}
-        {!cargando && turnos.length === 0 && (
+        {vista === "semana" && !cargando && turnos.length === 0 && (
           <button onClick={() => setRellenando(true)}
             style={{
               width: "100%", marginBottom: 10, padding: "12px 14px", borderRadius: 14, cursor: "pointer",
@@ -220,39 +286,52 @@ export default function TrabajoPage() {
           </button>
         )}
 
-        {/* Los 7 días: se tocan y se despliegan ahí mismo */}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={`${persona}-${lunes}`}
+            key={`${persona}-${vista}-${desde}`}
             initial={{ opacity: 0, x: direccion * 22 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: direccion * -22 }}
             transition={{ duration: 0.18, ease: [0.25, 0.46, 0.45, 0.94] }}
-            style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${BCN.arenaOsc}`, boxShadow: "0 2px 10px rgba(44,36,32,0.04)" }}
           >
-            {dias.map((f, i) => (
-              <DiaTrabajo
-                key={f}
-                fecha={f}
-                persona={persona}
-                turno={turnoDe(f)}
-                ventas={ventasDe(f)}
-                esHoy={f === hoy}
-                abierto={desplegado === f}
-                cargando={cargando}
-                conVentas={config.ventas}
-                ultima={i === 6}
-                onAlternar={() => setDesplegado((d) => (d === f ? null : f))}
-                onEditarHorario={() => setDiaAbierto(f)}
-                onEditarVenta={(v) => setVentaAbierta({ fecha: v.fecha, venta: v })}
-                onCambio={cargar}
-              />
-            ))}
+            {(vista === "dia" || vista === "semana") && (
+              <div style={{ borderRadius: 16, overflow: "hidden", border: `1px solid ${BCN.arenaOsc}`, boxShadow: "0 2px 10px rgba(44,36,32,0.04)" }}>
+                {(vista === "dia" ? [ancla] : diasDeSemana(lunes)).map((f, i, todos) => (
+                  <DiaTrabajo
+                    key={f}
+                    fecha={f}
+                    persona={persona}
+                    turno={turnoDe(f)}
+                    ventas={ventasDe(f)}
+                    esHoy={f === hoy}
+                    // En la vista de un día, siempre abierto
+                    abierto={vista === "dia" || desplegado === f}
+                    cargando={cargando}
+                    conVentas={conVentas}
+                    ultima={i === todos.length - 1}
+                    onAlternar={() => { if (vista === "semana") setDesplegado((d) => (d === f ? null : f)); }}
+                    onEditarHorario={() => setDiaAbierto(f)}
+                    onEditarVenta={(v) => setVentaAbierta({ fecha: v.fecha, venta: v })}
+                    onCambio={cargar}
+                  />
+                ))}
+              </div>
+            )}
+
+            {vista === "mes" && (
+              <VistaMes mes={ancla} hoy={hoy} turnos={turnos} ventas={ventas} conVentas={conVentas}
+                onDia={(f) => irA(f, "dia")} />
+            )}
+
+            {vista === "ano" && (
+              <VistaAno ano={ancla.slice(0, 4)} hoy={hoy} turnos={turnos} ventas={ventas} conVentas={conVentas}
+                onMes={(m) => irA(m, "mes")} />
+            )}
           </motion.div>
         </AnimatePresence>
 
         {/* Resumen del mes */}
-        {config.ventas && !cargando && <ResumenMes nombre={mes.nombre} ventas={ventasMes} />}
+        {conResumenMes && !cargando && <ResumenMes nombre={mes.nombre} ventas={ventasMes} />}
       </Pantalla>
 
       <HojaTurno
@@ -268,7 +347,6 @@ export default function TrabajoPage() {
         abierta={rellenando}
         persona={persona}
         lunes={lunes}
-        turnos={turnos}
         onCerrar={() => setRellenando(false)}
         onGuardado={cargar}
       />
@@ -281,6 +359,62 @@ export default function TrabajoPage() {
         onGuardado={cargar}
       />
     </>
+  );
+}
+
+/** Lo que dice la navegación según la vista: el título y, debajo, "Hoy", "Esta semana"… */
+function cabecera(vista: Vista, ancla: string, hoy: string): { titulo: string; etiqueta: string } {
+  if (vista === "dia") {
+    return {
+      titulo: fechaLarga(ancla),
+      etiqueta:
+        ancla === hoy ? "Hoy" :
+        ancla === sumarDias(hoy, 1) ? "Mañana" :
+        ancla === sumarDias(hoy, -1) ? "Ayer" : "",
+    };
+  }
+  if (vista === "semana") {
+    const l = lunesDe(ancla);
+    const esta = lunesDe(hoy);
+    return {
+      titulo: rangoSemana(l),
+      etiqueta:
+        l === esta ? "Esta semana" :
+        l === sumarDias(esta, -7) ? "La semana pasada" :
+        l === sumarDias(esta, 7) ? "La semana que viene" : "",
+    };
+  }
+  if (vista === "mes") {
+    return { titulo: mesYAno(ancla), etiqueta: ancla.slice(0, 7) === hoy.slice(0, 7) ? "Este mes" : "" };
+  }
+  return { titulo: ancla.slice(0, 4), etiqueta: ancla.slice(0, 4) === hoy.slice(0, 4) ? "Este año" : "" };
+}
+
+function SelectorVista({ valor, onChange }: { valor: Vista; onChange: (v: Vista) => void }) {
+  return (
+    <div role="tablist" style={{
+      display: "flex", marginTop: 16, padding: 3, borderRadius: 14,
+      background: BCN.arenaOsc, position: "relative",
+    }}>
+      {VISTAS.map((v) => {
+        const activa = v.valor === valor;
+        return (
+          <button key={v.valor} role="tab" aria-selected={activa} onClick={() => onChange(v.valor)}
+            style={{
+              flex: 1, position: "relative", padding: "8px 0", border: "none", background: "transparent",
+              cursor: "pointer", fontSize: 13.5, fontWeight: activa ? 700 : 500,
+              color: activa ? BCN.tinta : BCN.humo, transition: "color 0.15s",
+            }}>
+            {activa && (
+              <motion.span layoutId="vista-activa"
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                style={{ position: "absolute", inset: 0, borderRadius: 11, background: "white", boxShadow: "0 1px 4px rgba(44,36,32,0.12)" }} />
+            )}
+            <span style={{ position: "relative" }}>{v.label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

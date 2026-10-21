@@ -145,6 +145,42 @@ export function limitesMes(iso: string): { desde: string; hasta: string; nombre:
   return { desde, hasta, nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1) };
 }
 
+/** Vistas del calendario. */
+export type Vista = "dia" | "semana" | "mes" | "ano";
+
+/** Día 1 del mes que queda n meses antes o después. */
+export function sumarMeses(iso: string, n: number): string {
+  const d = aFecha(iso);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)).toISOString().slice(0, 10);
+}
+
+/** "Octubre 2026" */
+export function mesYAno(iso: string): string {
+  const d = aFecha(iso);
+  const mes = MESES_LARGOS[d.getUTCMonth()];
+  return `${mes.charAt(0).toUpperCase() + mes.slice(1)} ${d.getUTCFullYear()}`;
+}
+
+/** "oct" */
+export function mesCorto(iso: string): string {
+  return MESES[aFecha(iso).getUTCMonth()];
+}
+
+export function limitesAno(iso: string): { desde: string; hasta: string } {
+  const a = iso.slice(0, 4);
+  return { desde: `${a}-01-01`, hasta: `${a}-12-31` };
+}
+
+/** Los días que pinta un calendario de mes: de lunes a domingo, semanas completas. */
+export function rejillaMes(iso: string): string[] {
+  const { desde, hasta } = limitesMes(iso);
+  const inicio = lunesDe(desde);
+  const fin = sumarDias(lunesDe(hasta), 6);
+  const dias: string[] = [];
+  for (let f = inicio; f <= fin; f = sumarDias(f, 1)) dias.push(f);
+  return dias;
+}
+
 /* ─── Horas ────────────────────────────────────────────────── */
 
 export function aMinutos(hhmm: string): number {
@@ -169,6 +205,11 @@ export function textoHoras(min: number): string {
   if (!m) return `${h} h`;
   if (!h) return `${m} min`;
   return `${h} h ${m} min`;
+}
+
+/** "8h", "6,5h": para los huecos pequeños del calendario. */
+export function horasCortas(min: number): string {
+  return `${(min / 60).toLocaleString("es-ES", { maximumFractionDigits: 1 })}h`;
 }
 
 /** "10:00–14:00 · 17:00–21:00" */
@@ -243,13 +284,26 @@ export function resumenMes(ventas: Venta[]) {
 
 /* ─── Consultas: turnos ────────────────────────────────────── */
 
+/**
+ * Supabase devuelve como mucho 1.000 filas por consulta. Para la
+ * vista de un año entero se piden en tandas hasta tenerlas todas.
+ */
+async function todas<T>(pagina: (desde: number, hasta: number) => PromiseLike<{ data: unknown[] | null }>): Promise<T[]> {
+  const LOTE = 1000;
+  const filas: T[] = [];
+  for (let i = 0; ; i += LOTE) {
+    const { data } = await pagina(i, i + LOTE - 1);
+    filas.push(...((data ?? []) as T[]));
+    if (!data || data.length < LOTE) return filas;
+  }
+}
+
 export async function getTurnos(persona: Persona, desde: string, hasta: string): Promise<Turno[]> {
-  const { data } = await supabase
+  return todas<Turno>((a, b) => supabase
     .from("trabajo_turnos").select("*")
     .eq("user_name", persona)
     .gte("fecha", desde).lte("fecha", hasta)
-    .order("fecha");
-  return (data ?? []) as Turno[];
+    .order("fecha").range(a, b));
 }
 
 /** El siguiente día de trabajo después de una fecha. */
@@ -317,13 +371,13 @@ export async function borrarTurno(persona: Persona, fecha: string): Promise<bool
 /* ─── Consultas: ventas ────────────────────────────────────── */
 
 export async function getVentas(persona: Persona, desde: string, hasta: string): Promise<Venta[]> {
-  const { data } = await supabase
+  const data = await todas<Venta>((a, b) => supabase
     .from("trabajo_ventas").select("*")
     .eq("user_name", persona)
     .gte("fecha", desde).lte("fecha", hasta)
-    .order("fecha").order("hora");
+    .order("fecha").order("hora").order("id").range(a, b));
   // La base de datos devuelve la hora con segundos y el precio puede llegar como texto
-  return ((data ?? []) as Venta[]).map((v) => ({ ...v, hora: v.hora.slice(0, 5), precio: Number(v.precio) }));
+  return data.map((v) => ({ ...v, hora: v.hora.slice(0, 5), precio: Number(v.precio) }));
 }
 
 export interface DatosVenta {
