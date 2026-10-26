@@ -158,7 +158,7 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
     onLista(r);
   };
 
-  const ideas = ["Algo con garbanzos que no sea potaje", "Un curry suave para el tupper", "Cena ligera con huevo", "Bowl de pollo con salsa rica", "Algo con calabaza"];
+  const ideas = ["Unas lentejas como las de casa", "Pollo en salsa para el tupper", "Cena ligera con huevo", "Un guiso de carne con patatas", "Algo con garbanzos"];
 
   return (
     <Hoja abierta={abierta} onCerrar={() => { if (!pensando) onCerrar(); }} titulo="Nueva receta">
@@ -182,7 +182,7 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
           {modo === "idea" ? (
             <>
               <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} autoFocus
-                placeholder="¿Qué os apetece? Ej: algo con pollo y arroz que no sea lo de siempre"
+                placeholder="¿Qué os apetece? Ej: unas alubias con chorizo"
                 style={{ ...estiloInput, resize: "none", lineHeight: 1.5 }} />
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "10px 0 16px" }}>
                 {ideas.map((i) => (

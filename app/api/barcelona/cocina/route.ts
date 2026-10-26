@@ -88,10 +88,10 @@ function hoyEnMadrid(): string {
 
 function temporada(fecha: string): string {
   const mes = Number(fecha.slice(5, 7));
-  if (mes >= 3 && mes <= 5) return "primavera (alcachofa, espárragos, guisantes, fresas, habas)";
-  if (mes >= 6 && mes <= 8) return "verano (tomate, calabacín, berenjena, pimiento, melocotón, sandía)";
-  if (mes >= 9 && mes <= 11) return "otoño (calabaza, setas, boniato, granada, castañas, uvas, coles)";
-  return "invierno (cítricos, alcachofa, coliflor, puerro, legumbres de cuchara, caqui)";
+  if (mes >= 3 && mes <= 5) return "primavera (alcachofas, espárragos, guisantes, habas, fresas)";
+  if (mes >= 6 && mes <= 8) return "verano (tomate, pimiento, calabacín, berenjena, gazpacho y salmorejo)";
+  if (mes >= 9 && mes <= 11) return "otoño (setas, calabaza, puerro, coliflor y los primeros guisos de cuchara)";
+  return "invierno (legumbres de cuchara, cocidos, coliflor, puerro, cardo, cítricos)";
 }
 
 async function equipos(): Promise<Equipo[]> {
@@ -114,12 +114,16 @@ Cómo viven:
 
 Su cocina: ${tienen}.${faltan.length ? ` NO tienen ${faltan.join(", ")}: ninguna receta puede necesitarlo.` : ""}
 
+Lo que buscan: COCINA ESPAÑOLA DE TODA LA VIDA, la de casa. Sencilla pero no básica: platos reconocibles, con sabor y bien hechos, como los haría una madre o una abuela. Se vale algún toque que los haga especiales, pero sin convertirlos en otra cosa.
+Su estilo, por ejemplo: alubias con chorizo, lentejas estofadas, garbanzos con espinacas, patatas a la riojana, pollo al ajillo, pollo en pepitoria, albóndigas en salsa, carne guisada con patatas, macarrones con chorizo, arroz con pollo, pisto con huevo, tortilla de patatas, filetes empanados, judías verdes con patatas, sopa castellana, revuelto de setas, lomo en salsa, ensaladilla.
+
 Lo que no se negocia:
 - Rut es ALÉRGICA A LAS NUECES. Nunca uses nueces ni mezclas de frutos secos, ni como topping ni en salsas.
-- Comen poco pescado. Como mucho una vez por semana, y que sea fácil y amable (salmón, merluza, gambas, atún…), una forma de probar cosas nuevas.
+- NO les gusta y no se propone, ni como ingrediente principal: boniato, verduras raras (kale, pak choi, edamame, tofu, tempeh, quinoa, cuscús…), bowls, platos asiáticos o de fusión (teriyaki, curry, ramen, poke, wok con soja dulce, sriracha…) y en general las recetas "de influencer".
+- Comen poco pescado: como mucho una vez por semana, y a la española y sencillo (merluza en salsa verde, bacalao con tomate, atún con tomate…).
 
-Lo que buscan: ideas ORIGINALES, no lo de siempre. Cocinas del mundo, giros a platos de casa y lo que se lleva en TikTok y Pinterest (bowls, one-pot, salteados, currys, tostas, smash…). Que suene apetecible y que salga bien a la primera. Es ${temporada(fecha)}: tira de producto de temporada.
-Platos equilibrados: proteína, verdura y un hidrato de calidad. Alejandro hace deporte: en los platos principales, unos 25-35 g de proteína por ración cuando encaje.
+Es ${temporada(fecha)}: tira de producto de temporada y de mercado.
+Platos equilibrados: proteína, verdura y un hidrato, como se ha comido siempre en casa. Alejandro hace deporte: en los platos principales, unos 25-35 g de proteína por ración cuando encaje.
 
 Formato: nombres de platos cortos y con gancho, en español de España. Ingredientes con nombres genéricos de súper, sin marcas. Cantidades realistas en estas unidades: g, ml, ud (unidades), cda (cucharada), cdta (cucharadita), pizca. Cantidad 0 = al gusto. Valores nutricionales por ración, estimados con criterio a partir de los ingredientes.`;
 }
@@ -271,7 +275,7 @@ Ahora organizas su MENÚ de comidas y cenas. Reglas:
 - Rellena exactamente los huecos que se piden, ni uno más.
 - Toda comida tiene que poder hacerse la noche antes y llevarse en tupper (comerse templada o recalentada en microondas). Etiqueta "tupper".
 - Piensa la cena de un día y la comida del día siguiente como UNA sesión de cocina por la noche: entre las dos, una hora como mucho, y mejor si comparten algún ingrediente o elaboración.
-- Mira los horarios de cada día: si Rut sale a las 20:30 o más tarde, esa noche todo rápido (cena de 20 minutos como mucho). Los días que libran los dos, algo con más gracia para cocinar juntos ("para dos").
+- Mira los horarios de cada día: si Rut sale a las 20:30 o más tarde, esa noche todo rápido (cena de 20 minutos como mucho: un revuelto, una tortilla, un plancha con ensalada…). Los días que libran los dos, algo con más fundamento para cocinar juntos: un buen guiso, un arroz… ("para dos").
 - Variedad: no repitas la proteína principal dos veces seguidas. A la semana, legumbre 2 o 3 veces, como mucho un pescado y verdura todos los días.
 - Puedes repetir platos que les encantan o les gustan (lista de abajo, con su id) más o menos en uno de cada cuatro huecos, sin repetir ninguno que hayan comido en los últimos 10 días.
 - Nunca propongas nada de lo que NO quieren.
@@ -370,9 +374,27 @@ ${deseo ? `\nLo que les apetece esta vez: ${deseo}` : ""}`;
     });
   }
 
+  // Lo que había en esos huecos antes de cambiarlo (cuando se rehace la semana)
+  const antes = ((cercano.data ?? []) as Hueco[])
+    .filter((h) => h.receta_id && hecho.has(`${h.fecha}|${h.momento}`))
+    .map((h) => h.receta_id as string);
+
   if (filas.length) {
     const { error } = await supabase.from("super_plan").upsert(filas, { onConflict: "fecha,momento" });
     if (error) return { ok: false, error: "No se ha podido guardar el menú." };
+  }
+
+  // Las recetas sustituidas que puso la IA y nadie llegó a cocinar ni valorar, fuera:
+  // así el recetario no se llena de platos que no quisisteis
+  const viejas = [...new Set(antes)].filter((id) => !filas.some((f) => f.receta_id === id));
+  if (viejas.length) {
+    const { data: siguen } = await supabase.from("super_plan").select("receta_id").in("receta_id", viejas);
+    const usadas = new Set(((siguen ?? []) as { receta_id: string }[]).map((x) => x.receta_id));
+    const sobran = viejas.filter((id) => !usadas.has(id));
+    if (sobran.length) {
+      await supabase.from("super_recetas").delete()
+        .in("id", sobran).eq("origen", "ia").eq("veces", 0).is("valoracion", null);
+    }
   }
 
   return { ok: true, rellenados: filas.length };
@@ -392,7 +414,7 @@ async function desdeNevera(deseo: string): Promise<RespuestaCocina> {
 Ahora te enseñan lo que tienen en la nevera y la despensa. Propón TRES recetas originales y distintas entre sí:
 - Aprovecha sobre todo lo que tienen, empezando por lo que caduca antes.
 - Puedes suponer básicos de despensa (aceite, sal, especias, ajo, harina, arroz o pasta). Como mucho, 2 o 3 cosas más que haya que comprar.
-- Una muy rápida (15 minutos), una con calma y una sorpresa que no se esperen.
+- Una muy rápida (15 minutos), una con calma y un clásico de casa de los de toda la vida.
 - 2 raciones cada una, con pasos.
 - Nada de lo que NO quieren.
 
@@ -421,7 +443,7 @@ async function desdeIdea(texto: string): Promise<RespuestaCocina> {
   const salida = await pedir<RecetaNueva>({
     system: `${sistemaBase}
 
-Te piden UNA receta. Si la idea es vaga ("algo con pollo", "una cena ligera"), elige tú una versión original y apetecible. Si es un plato concreto, haz la mejor versión casera de ese plato. 2 raciones salvo que digan otra cosa, con pasos.
+Te piden UNA receta. Si la idea es vaga ("algo con pollo", "una cena ligera"), elige un plato español de toda la vida que encaje. Si es un plato concreto, haz la mejor versión casera de ese plato. 2 raciones salvo que digan otra cosa, con pasos.
 
 Sus gustos:
 ${g.texto}`,
@@ -750,7 +772,7 @@ Ahora haces el RESUMEN de cómo han comido una semana (comidas y cenas; el desay
 - "titular": una frase corta y con chispa sobre la semana.
 - "bien": 2 o 3 cosas concretas que han hecho bien (variedad, legumbre, verdura, proteína, cocinar en casa…).
 - "mejorar": 1 o 2 cosas concretas y fáciles, sin culpas. Si todo está bien, una idea para la semana que viene.
-- "consejo": una idea práctica para la próxima semana, original.
+- "consejo": una idea práctica para la próxima semana (un plato de casa que les vendría bien, un truco…).
 Básate solo en el menú que te pasan.`,
     usuario: `Menú de la semana del ${fechaCorta(lunes)} al ${fechaCorta(domingo)}:\n${lineas}`,
     effort: "low",

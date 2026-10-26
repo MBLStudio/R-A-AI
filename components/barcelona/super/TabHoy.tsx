@@ -22,15 +22,15 @@ const TRUCOS = [
   "Cocina el doble de legumbre y congela la mitad: tendrás base para dos comidas más.",
   "Un puñado de espinacas en cualquier salteado suma verdura sin que se note.",
   "El arroz del tupper se recalienta mejor con una cucharada de agua por encima.",
-  "Yogur natural + ajo + limón = salsa para casi todo, y con proteína.",
-  "Asa una bandeja de verduras de golpe y úsala tres días: en bowls, tostas y pasta.",
+  "Un buen sofrito de cebolla y pimiento, hecho con calma, arregla cualquier guiso.",
+  "Las lentejas y los garbanzos están más ricos al día siguiente: perfectos para el tupper.",
   "Si cocinas pollo para la cena, haz de más: es la proteína del tupper de mañana.",
-  "Las especias hacen que lo sano no sea aburrido: comino, pimentón y curry cambian un plato.",
+  "Pimentón de la Vera, laurel y un buen aceite: con eso un guiso de casa ya es otra cosa.",
   "Un huevo encima convierte unas verduras en una cena completa en 5 minutos.",
   "Congela el pan en rebanadas: tostadas recién hechas sin tirar nada.",
   "Los garbanzos de bote, escurridos y tostados en sartén, son un snack crujiente buenísimo.",
   "Deja el tupper de mañana en la nevera antes de cenar: así no se olvida por la mañana.",
-  "Calabaza asada + batidora = crema en 10 minutos. Es temporada.",
+  "Con la batidora, unas verduras cocidas y un chorrito de aceite tenéis crema para la cena en 10 minutos.",
 ];
 
 function saludo(nombre: string): string {

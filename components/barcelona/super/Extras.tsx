@@ -63,30 +63,36 @@ export async function rellenarConIA(
 }
 
 /** La hoja de "Planificar con la IA": qué os apetece y a rellenar. */
-export function HojaPlanificar({ abierta, huecos, quien, onCerrar, onHecho }: {
+export function HojaPlanificar({ abierta, huecos, ocupados = [], quien, onCerrar, onHecho }: {
   abierta: boolean;
+  /** Los huecos sin plato. */
   huecos: { fecha: string; momento: Momento }[];
+  /** Los que ya tienen plato y se pueden rehacer (los no cocinados). */
+  ocupados?: { fecha: string; momento: Momento }[];
   quien: string;
   onCerrar: () => void;
   onHecho: () => void;
 }) {
   const [deseo, setDeseo] = useState("");
+  const [rehacer, setRehacer] = useState(false);
   const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { if (abierta) { setError(null); setProgreso(null); } }, [abierta]);
+  useEffect(() => { if (abierta) { setError(null); setProgreso(null); setRehacer(huecos.length === 0 && ocupados.length > 0); } }, [abierta, huecos.length, ocupados.length]);
+
+  const todos = rehacer ? [...huecos, ...ocupados] : huecos;
 
   const empezar = async () => {
     setError(null);
     setProgreso({ hechas: 0, total: 1 });
-    const res = await rellenarConIA(huecos, deseo.trim(), quien, (hechas, total) => setProgreso({ hechas, total }));
+    const res = await rellenarConIA(todos, deseo.trim(), quien, (hechas, total) => setProgreso({ hechas, total }));
     setProgreso(null);
     if (res.error) { setError(res.error); if (res.rellenados) onHecho(); return; }
     onHecho();
     onCerrar();
   };
 
-  const ideas = ["Algo de cuchara", "Comida asiática", "Platos con legumbre", "Cenas ligeras", "Algo nuevo con pescado", "Mucha verdura"];
+  const ideas = ["Algo de cuchara", "Platos de la abuela", "Legumbre", "Cenas ligeras", "Un pescado sencillo", "Más verdura"];
 
   return (
     <Hoja abierta={abierta} onCerrar={() => { if (!progreso) onCerrar(); }} titulo="Planificar con la IA">
@@ -99,10 +105,32 @@ export function HojaPlanificar({ abierta, huecos, quien, onCerrar, onHecho }: {
         <>
           <p style={{ fontSize: 14, color: BCN.tinta, margin: "0 0 14px", lineHeight: 1.5 }}>
             {huecos.length === 0
-              ? "No queda ningún hueco libre en estos días. 🎉"
-              : <>Hay <strong>{huecos.length} {huecos.length === 1 ? "hueco" : "huecos"}</strong> sin plato. Tiene en cuenta vuestros horarios, lo que os gusta y que la comida va en tupper.</>}
+              ? "No queda ningún hueco libre en estos días."
+              : <>Hay <strong>{huecos.length} {huecos.length === 1 ? "hueco" : "huecos"}</strong> sin plato.</>}
+            {" "}Tiene en cuenta vuestros horarios, lo que os gusta y que la comida va en tupper.
           </p>
-          {huecos.length > 0 && (
+
+          {ocupados.length > 0 && (
+            <button onClick={() => setRehacer((v) => !v)}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, cursor: "pointer", textAlign: "left",
+                border: `1.5px solid ${rehacer ? VERDE : BCN.arenaOsc}`, background: rehacer ? `${VERDE}10` : "white", marginBottom: 14,
+              }}>
+              <span style={{
+                width: 22, height: 22, borderRadius: 7, flexShrink: 0, border: `2px solid ${rehacer ? VERDE : BCN.arenaOsc}`,
+                background: rehacer ? VERDE : "white", color: "white", fontSize: 13, fontWeight: 800,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>{rehacer ? "✓" : ""}</span>
+              <span>
+                <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: BCN.tinta }}>
+                  Rehacer también lo que ya hay ({ocupados.length} {ocupados.length === 1 ? "plato" : "platos"})
+                </span>
+                <span style={{ display: "block", fontSize: 12.5, color: BCN.humo }}>Lo ya cocinado no se toca</span>
+              </span>
+            </button>
+          )}
+
+          {todos.length > 0 && (
             <>
               <Campo label="¿Algo que os apetezca? (opcional)">
                 <input value={deseo} onChange={(e) => setDeseo(e.target.value)} placeholder="Ej: algo de cuchara, que haga frío" style={estiloInput} />
@@ -116,7 +144,9 @@ export function HojaPlanificar({ abierta, huecos, quien, onCerrar, onHecho }: {
                 ))}
               </div>
               {error && <div style={{ marginBottom: 10 }}><Aviso>{error}</Aviso></div>}
-              <BotonIA onClick={empezar}>Rellenar {huecos.length} {huecos.length === 1 ? "hueco" : "huecos"}</BotonIA>
+              <BotonIA onClick={empezar}>
+                {rehacer ? `Rehacer ${todos.length} ${todos.length === 1 ? "plato" : "platos"}` : `Rellenar ${todos.length} ${todos.length === 1 ? "hueco" : "huecos"}`}
+              </BotonIA>
             </>
           )}
         </>

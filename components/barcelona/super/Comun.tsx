@@ -161,9 +161,9 @@ export function BotonesValoracion({ valor, onChange }: { valor: Valoracion | nul
 /* ─── Mientras piensa la IA ────────────────────────────────── */
 
 const FRASES = [
-  "Abriendo la nevera…", "Mirando qué hay de temporada…", "Pensando algo que no sea lo de siempre…",
-  "Calculando proteínas…", "Probando la salsa…", "Buscando inspiración en TikTok…",
-  "Apuntando cantidades…", "Poniéndole un toque…",
+  "Abriendo la nevera…", "Mirando qué hay en el mercado…", "Pensando en algo de los de toda la vida…",
+  "Calculando proteínas…", "Probando la salsa…", "Preguntando a la abuela…",
+  "Apuntando cantidades…", "Poniendo el sofrito…",
 ];
 
 export function Pensando({ texto }: { texto?: string }) {

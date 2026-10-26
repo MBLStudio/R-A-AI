@@ -53,7 +53,12 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
 
   const porId = useMemo(() => new Map(recetas.map((r) => [r.id, r])), [recetas]);
   const hueco = (f: string, m: Momento) => plan.find((h) => h.fecha === f && h.momento === m) ?? null;
-  const libres = huecosLibres(lunes < hoy ? hoy : lunes, domingo, plan, hoy);
+  const desde = lunes < hoy ? hoy : lunes;
+  const libres = huecosLibres(desde, domingo, plan, hoy);
+  // Lo que ya tiene plato y aún no se ha cocinado: se puede rehacer
+  const ocupados = plan
+    .filter((h) => h.receta_id && !h.hecho && h.fecha >= desde && h.fecha <= domingo && !(h.fecha === hoy && h.momento === "comida"))
+    .map((h) => ({ fecha: h.fecha, momento: h.momento }));
 
   const recargar = () => { cargar(); onCambio(); };
 
@@ -74,8 +79,8 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
       {domingo >= hoy && (
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           <div style={{ flex: 1.4 }}>
-            <BotonIA onClick={() => setPlanificando(true)} disabled={libres.length === 0}>
-              {libres.length === 0 ? "Semana completa" : "Planificar la semana"}
+            <BotonIA onClick={() => setPlanificando(true)} disabled={libres.length === 0 && ocupados.length === 0}>
+              {libres.length > 0 ? "Planificar la semana" : ocupados.length > 0 ? "Rehacer la semana" : "Semana completa"}
             </BotonIA>
           </div>
           <motion.button whileTap={{ scale: 0.97 }}
@@ -154,7 +159,7 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
         onCambio={recargar}
         abrirReceta={abrirReceta}
       />
-      <HojaPlanificar abierta={planificando} huecos={libres} quien={quien} onCerrar={() => setPlanificando(false)} onHecho={recargar} />
+      <HojaPlanificar abierta={planificando} huecos={libres} ocupados={ocupados} quien={quien} onCerrar={() => setPlanificando(false)} onHecho={recargar} />
       <HojaBatch rango={batch} quien={quien} onCerrar={() => setBatch(null)} />
     </div>
   );
