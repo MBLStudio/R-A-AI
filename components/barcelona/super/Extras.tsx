@@ -92,7 +92,7 @@ export function HojaPlanificar({ abierta, huecos, ocupados = [], quien, onCerrar
     onCerrar();
   };
 
-  const ideas = ["Algo de cuchara", "Platos de la abuela", "Legumbre", "Cenas ligeras", "Un pescado sencillo", "Más verdura"];
+  const ideas = ["Más pollo", "Arroces", "Algo de cuchara", "Platos de la abuela", "Cenas ligeras", "Pasta"];
 
   return (
     <Hoja abierta={abierta} onCerrar={() => { if (!progreso) onCerrar(); }} titulo="Planificar con la IA">

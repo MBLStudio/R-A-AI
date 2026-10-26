@@ -158,7 +158,7 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
     onLista(r);
   };
 
-  const ideas = ["Unas lentejas como las de casa", "Pollo en salsa para el tupper", "Cena ligera con huevo", "Un guiso de carne con patatas", "Algo con garbanzos"];
+  const ideas = ["Pollo al limón con arroz", "Unas lentejas como las de casa", "Arroz a la cubana", "Fajitas de pollo", "Cena ligera con huevo"];
 
   return (
     <Hoja abierta={abierta} onCerrar={() => { if (!pensando) onCerrar(); }} titulo="Nueva receta">

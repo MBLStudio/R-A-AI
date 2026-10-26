@@ -114,12 +114,14 @@ Cómo viven:
 
 Su cocina: ${tienen}.${faltan.length ? ` NO tienen ${faltan.join(", ")}: ninguna receta puede necesitarlo.` : ""}
 
-Lo que buscan: COCINA ESPAÑOLA DE TODA LA VIDA, la de casa. Sencilla pero no básica: platos reconocibles, con sabor y bien hechos, como los haría una madre o una abuela. Se vale algún toque que los haga especiales, pero sin convertirlos en otra cosa.
-Su estilo, por ejemplo: alubias con chorizo, lentejas estofadas, garbanzos con espinacas, patatas a la riojana, pollo al ajillo, pollo en pepitoria, albóndigas en salsa, carne guisada con patatas, macarrones con chorizo, arroz con pollo, pisto con huevo, tortilla de patatas, filetes empanados, judías verdes con patatas, sopa castellana, revuelto de setas, lomo en salsa, ensaladilla.
+Lo que buscan: COMIDA DE CASA DE TODA LA VIDA. Sobre todo española, y también los básicos de fuera que come todo el mundo. Sencilla pero no básica: platos reconocibles, con sabor y bien hechos, como los haría una madre. Se vale algún toque que los haga especiales, pero sin convertirlos en otra cosa.
+Su estilo, por ejemplo: alubias con chorizo, lentejas estofadas, garbanzos con espinacas, patatas a la riojana, albóndigas en salsa, carne guisada con patatas, macarrones con chorizo, pisto con huevo, tortilla de patatas, judías verdes con patatas, sopa castellana, lomo en salsa, ensaladilla; y de fuera, lo de siempre: espaguetis a la boloñesa o carbonara, lasaña, fajitas o burritos de pollo, hamburguesa casera, pizza casera, arroz tres delicias.
+- POLLO: lo comen mucho y les gusta. Ponlo a menudo (unas tres veces por semana entre comidas y cenas) y cada vez de una forma distinta: al ajillo, en pepitoria, al limón, en salsa, empanado, a la plancha con verduras, en fajitas, con arroz, guisado con patatas…
+- ARROZ: también les gusta mucho. Arroz con pollo, arroz a la cubana, arroz tres delicias, arroz caldoso, arroz con verduras… al menos un par de veces por semana.
 
 Lo que no se negocia:
 - Rut es ALÉRGICA A LAS NUECES. Nunca uses nueces ni mezclas de frutos secos, ni como topping ni en salsas.
-- NO les gusta y no se propone, ni como ingrediente principal: boniato, verduras raras (kale, pak choi, edamame, tofu, tempeh, quinoa, cuscús…), bowls, platos asiáticos o de fusión (teriyaki, curry, ramen, poke, wok con soja dulce, sriracha…) y en general las recetas "de influencer".
+- NO les gusta y no se propone, ni como ingrediente principal: boniato, verduras raras (kale, pak choi, edamame, tofu, tempeh, quinoa, cuscús…), bowls, platos de fusión o con salsas raras (teriyaki, curry, ramen, poke, sriracha…) y en general las recetas "de influencer". De fuera, solo lo muy conocido y sencillo.
 - Comen poco pescado: como mucho una vez por semana, y a la española y sencillo (merluza en salsa verde, bacalao con tomate, atún con tomate…).
 
 Es ${temporada(fecha)}: tira de producto de temporada y de mercado.
@@ -275,8 +277,8 @@ Ahora organizas su MENÚ de comidas y cenas. Reglas:
 - Rellena exactamente los huecos que se piden, ni uno más.
 - Toda comida tiene que poder hacerse la noche antes y llevarse en tupper (comerse templada o recalentada en microondas). Etiqueta "tupper".
 - Piensa la cena de un día y la comida del día siguiente como UNA sesión de cocina por la noche: entre las dos, una hora como mucho, y mejor si comparten algún ingrediente o elaboración.
-- Mira los horarios de cada día: si Rut sale a las 20:30 o más tarde, esa noche todo rápido (cena de 20 minutos como mucho: un revuelto, una tortilla, un plancha con ensalada…). Los días que libran los dos, algo con más fundamento para cocinar juntos: un buen guiso, un arroz… ("para dos").
-- Variedad: no repitas la proteína principal dos veces seguidas. A la semana, legumbre 2 o 3 veces, como mucho un pescado y verdura todos los días.
+- Mira los horarios de cada día: si Rut sale a las 20:30 o más tarde, esa noche todo rápido (cena de 20 minutos como mucho: un revuelto, una tortilla, pollo a la plancha con ensalada, unas fajitas…). Los días que libran los dos, algo con más fundamento para cocinar juntos: un buen guiso, un arroz… ("para dos").
+- Variedad: pollo unas tres veces por semana (nunca dos veces seguidas ni preparado igual), arroz al menos dos veces, legumbre 2 o 3 veces, como mucho un pescado y verdura todos los días.
 - Puedes repetir platos que les encantan o les gustan (lista de abajo, con su id) más o menos en uno de cada cuatro huecos, sin repetir ninguno que hayan comido en los últimos 10 días.
 - Nunca propongas nada de lo que NO quieren.
 - Las recetas nuevas, para 2 raciones y SIN pasos (los pasos se piden aparte cuando los quieran ver).
