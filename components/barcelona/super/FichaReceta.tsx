@@ -6,7 +6,7 @@ import { BCN } from "@/lib/barcelona/types";
 import { subirFoto } from "@/lib/upload";
 import { hoyMadrid, sumarDias, fechaCorta } from "@/lib/barcelona/trabajo";
 import {
-  DIFICULTAD, MOMENTOS, escalar, textoCantidad, avisoAlergia, anadirALista, crearReceta,
+  DIFICULTAD, MOMENTOS, DIAS_SEMANA, escalar, textoCantidad, avisoAlergia, anadirALista, crearReceta,
   actualizarReceta, borrarReceta, guardarHueco, pedirACocina, buscarEnTikTok, buscarEnPinterest, buscarEnYouTube,
   type Receta, type RecetaNueva, type ItemLista, type Momento, type Valoracion,
 } from "@/lib/barcelona/super";
@@ -138,7 +138,7 @@ export function FichaReceta({ receta, previa, quien, lista, onCerrar, onCambio, 
     <Hoja abierta={abierta} onCerrar={onCerrar} titulo={r.nombre}>
       {/* Portada */}
       <div style={{ position: "relative", marginTop: -6 }}>
-        <Portada receta={{ nombre: r.nombre, foto_url: actual?.foto_url ?? null }} alto={190} radio={18} emoji={72} />
+        <Portada receta={{ nombre: r.nombre, foto_url: actual ? actual.foto_url : previa?.foto_url ?? null }} alto={190} radio={18} emoji={72} />
         {guardada && (
           <>
             <button onClick={() => refFoto.current?.click()} disabled={ocupado === "foto"}
@@ -181,6 +181,35 @@ export function FichaReceta({ receta, previa, quien, lista, onCerrar, onCambio, 
               La habéis hecho {actual.veces === 1 ? "una vez" : `${actual.veces} veces`}
               {actual.ultima_vez ? ` · la última, el ${fechaCorta(actual.ultima_vez)}` : ""}
             </p>
+          )}
+
+          {/* Plato fijo: de los vuestros, que salga a menudo */}
+          <motion.button whileTap={{ scale: 0.98 }}
+            onClick={() => cambiar({ fijo: !actual.fijo, dia_fijo: actual.fijo ? null : actual.dia_fijo })}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", gap: 11, marginTop: 12, padding: "11px 13px", borderRadius: 14,
+              cursor: "pointer", textAlign: "left",
+              border: `1.5px solid ${actual.fijo ? BCN.sol : BCN.arenaOsc}`, background: actual.fijo ? `${BCN.sol}14` : "white",
+            }}>
+            <span style={{ fontSize: 20, filter: actual.fijo ? "none" : "grayscale(1)", opacity: actual.fijo ? 1 : 0.5 }}>⭐</span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: BCN.tinta }}>
+                {actual.fijo ? "Es de vuestros platos fijos" : "Hacerlo plato fijo"}
+              </span>
+              <span style={{ display: "block", fontSize: 12, color: BCN.humo }}>
+                {actual.fijo
+                  ? actual.dia_fijo ? `Saldrá en el menú los ${DIAS_SEMANA[actual.dia_fijo - 1].toLowerCase()}` : "La IA lo irá poniendo a menudo"
+                  : "Para que la IA lo ponga a menudo en el menú"}
+              </span>
+            </span>
+          </motion.button>
+          {actual.fijo && (
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+              <DiaFijo activo={!actual.dia_fijo} onClick={() => cambiar({ dia_fijo: null })}>Cualquier día</DiaFijo>
+              {DIAS_SEMANA.map((d, i) => (
+                <DiaFijo key={d} activo={actual.dia_fijo === i + 1} onClick={() => cambiar({ dia_fijo: i + 1 })}>{d.slice(0, 3)}</DiaFijo>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -301,6 +330,18 @@ export function FichaReceta({ receta, previa, quien, lista, onCerrar, onCambio, 
 }
 
 /* ─── Piezas ───────────────────────────────────────────────── */
+
+function DiaFijo({ children, activo, onClick }: { children: React.ReactNode; activo: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        padding: "6px 10px", borderRadius: 14, cursor: "pointer", fontSize: 12.5, fontWeight: activo ? 700 : 500,
+        border: `1px solid ${activo ? BCN.sol : BCN.arenaOsc}`, background: activo ? BCN.sol : "white", color: activo ? "white" : BCN.tinta,
+      }}>
+      {children}
+    </button>
+  );
+}
 
 function Chip({ children, color = BCN.humo }: { children: React.ReactNode; color?: string }) {
   return (

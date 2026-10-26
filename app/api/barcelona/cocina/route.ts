@@ -6,14 +6,17 @@ import {
   SECCIONES, EQUIPOS, EQUIPOS_INICIALES, avisoAlergia,
   type Receta, type RecetaNueva, type ItemNevera, type Momento, type Hueco, type Equipo,
   type PeticionCocina, type RespuestaCocina, type Seccion, type Unidad,
-  type SesionBatch, type ResumenSemana,
+  type SesionBatch, type ResumenSemana, type Propuesta,
 } from "@/lib/barcelona/super";
 
 /* ============================================================
    La IA de la cocina.
 
-   Una sola puerta con siete cosas que sabe hacer:
-     · plan      → rellena huecos del menú (y los guarda)
+   Una sola puerta con estas cosas que sabe hacer:
+     · proponer  → platos para unos huecos del menú, sin guardar
+     · aplicar   → guarda lo propuesto (y lo que se ha quitado)
+     · plan      → proponer y guardar de una vez
+     · foto      → la receta de un plato que habéis cocinado
      · nevera    → tres recetas con lo que hay en casa
      · receta    → una receta a partir de una idea suelta
      · importar  → una receta a partir de un enlace o un texto
@@ -133,7 +136,7 @@ Formato: nombres de platos cortos y con gancho, en español de España. Ingredie
 async function gustos(): Promise<{ texto: string; recetas: Receta[] }> {
   const { data } = await supabase
     .from("super_recetas")
-    .select("id, nombre, valoracion, etiquetas, ultima_vez, veces")
+    .select("id, nombre, valoracion, etiquetas, ultima_vez, veces, fijo, dia_fijo")
     .limit(500);
   const recetas = (data ?? []) as Receta[];
   const nombres = (v: string) => recetas.filter((r) => r.valoracion === v).map((r) => r.nombre);
@@ -162,7 +165,7 @@ async function textoNevera(): Promise<{ texto: string; items: ItemNevera[] }> {
 
 async function pedir<T>(opciones: {
   system: string;
-  usuario: string;
+  usuario: Anthropic.MessageParam["content"];
   esquema: Record<string, unknown>;
   effort: "low" | "medium";
   maxTokens: number;
@@ -226,9 +229,13 @@ function conAviso(r: RecetaNueva): RecetaNueva {
   return { ...r, nota: [`⚠️ ${aviso}`, r.nota].filter(Boolean).join("\n") };
 }
 
-/* ─── plan ─────────────────────────────────────────────────── */
+/* ─── menú: proponer y aplicar ─────────────────────────────── */
 
 const MAX_HUECOS = 14; // una semana por petición: así cabe en el tiempo de Vercel
+
+type HuecoPedido = { fecha: string; momento: Momento };
+
+const clavePlato = (h: { fecha: string; momento: string }) => `${h.fecha}|${h.momento}`;
 
 function lineaTurno(nombre: string, t: Turno | undefined): string {
   if (!t) return `${nombre}: sin horario apuntado`;
@@ -236,10 +243,27 @@ function lineaTurno(nombre: string, t: Turno | undefined): string {
   return `${nombre}: trabaja ${textoTramos(t.tramos)}`;
 }
 
-async function plan(huecos: { fecha: string; momento: Momento }[], deseo: string, quien: string): Promise<RespuestaCocina> {
-  const validos = huecos
-    .filter((h) => /^\d{4}-\d{2}-\d{2}$/.test(h.fecha) && (h.momento === "comida" || h.momento === "cena"))
-    .slice(0, MAX_HUECOS);
+/** 1 = lunes … 7 = domingo */
+function diaDeSemana(fecha: string): number {
+  return ((new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+}
+
+function huecosValidos(huecos: HuecoPedido[], tope: number): HuecoPedido[] {
+  const vistos = new Set<string>();
+  return (Array.isArray(huecos) ? huecos : [])
+    .filter((h) => h && /^\d{4}-\d{2}-\d{2}$/.test(h.fecha) && (h.momento === "comida" || h.momento === "cena"))
+    .filter((h) => { const k = clavePlato(h); if (vistos.has(k)) return false; vistos.add(k); return true; })
+    .slice(0, tope);
+}
+
+/**
+ * Propone platos para unos huecos, sin guardar nada.
+ * Los fijos con día van solos a su día; el resto lo decide la IA.
+ */
+async function proponer(
+  huecos: HuecoPedido[], deseo: string, evitar: string[],
+): Promise<{ ok: true; propuestas: Propuesta[] } | { ok: false; error: string }> {
+  const validos = huecosValidos(huecos, MAX_HUECOS);
   if (!validos.length) return { ok: false, error: "No hay huecos que rellenar." };
 
   const fechas = [...new Set(validos.map((h) => h.fecha))].sort();
@@ -256,18 +280,49 @@ async function plan(huecos: { fecha: string; momento: Momento }[], deseo: string
     voz(desde),
   ]);
 
-  const nombrePorId = new Map(g.recetas.map((r) => [r.id, r.nombre]));
-  const yaEnMenu = ((cercano.data ?? []) as Hueco[])
-    .map((h) => `${h.fecha} ${h.momento}: ${h.receta_id ? nombrePorId.get(h.receta_id) ?? "receta" : h.texto ?? ""}`)
+  const recetaPorId = new Map(g.recetas.map((r) => [r.id, r]));
+  const nombre = (id: string | null) => (id ? recetaPorId.get(id)?.nombre ?? "receta" : "");
+  const pedido = new Set(validos.map(clavePlato));
+  const cercanos = (cercano.data ?? []) as Hueco[];
+  // Lo que se queda tal cual (fuera de los huecos que se piden)
+  const fuera = cercanos.filter((h) => !pedido.has(clavePlato(h)));
+  // Lo que se va a sustituir: la IA tiene que proponer otra cosa
+  const sustituidos = cercanos.filter((h) => pedido.has(clavePlato(h)) && h.receta_id).map((h) => nombre(h.receta_id));
+
+  const propuestas: Propuesta[] = [];
+  const asignado = new Set<string>();
+
+  // 1. Los fijos con día preferido, a su día (si no salen ya esa semana)
+  for (const r of g.recetas.filter((x) => x.fijo && x.dia_fijo && x.valoracion !== "nunca")) {
+    const candidatos = validos
+      .filter((h) => diaDeSemana(h.fecha) === r.dia_fijo && !asignado.has(clavePlato(h)))
+      .sort((a, b) => (a.momento === "cena" ? 0 : 1) - (b.momento === "cena" ? 0 : 1));
+    const h = candidatos[0];
+    if (!h) continue;
+    const yaSale = fuera.some((x) => x.receta_id === r.id && x.fecha >= sumarDias(h.fecha, -3) && x.fecha <= sumarDias(h.fecha, 3));
+    if (yaSale) continue;
+    propuestas.push({ fecha: h.fecha, momento: h.momento, receta_id: r.id, receta: null });
+    asignado.add(clavePlato(h));
+  }
+
+  // 2. El resto, la IA
+  const paraIA = validos.filter((h) => !asignado.has(clavePlato(h)));
+  if (!paraIA.length) return { ok: true, propuestas };
+
+  const yaEnMenu = fuera
+    .map((h) => `${h.fecha} ${h.momento}: ${h.receta_id ? nombre(h.receta_id) : h.texto ?? ""}`)
+    .concat(propuestas.map((p) => `${p.fecha} ${p.momento}: ${nombre(p.receta_id)}`))
     .join("\n");
 
   const reutilizables = g.recetas
-    .filter((r) => r.valoracion === "encanta" || r.valoracion === "bien")
-    .map((r) => `- ${r.id} · ${r.nombre}${r.valoracion === "encanta" ? " ❤️" : ""}${r.ultima_vez ? ` (última vez ${r.ultima_vez})` : ""}`)
+    .filter((r) => r.valoracion === "encanta" || r.valoracion === "bien" || (r.fijo && !r.dia_fijo && r.valoracion !== "nunca"))
+    .map((r) => `- ${r.id} · ${r.nombre}${r.fijo ? " ⭐ fijo" : ""}${r.valoracion === "encanta" ? " ❤️" : ""}${r.ultima_vez ? ` (última vez ${r.ultima_vez})` : ""}`)
     .join("\n");
 
-  const dias = fechas.map((f) => {
-    const momentos = validos.filter((h) => h.fecha === f).map((h) => h.momento).join(" y ");
+  const noRepetir = [...new Set([...evitar, ...sustituidos].map((x) => String(x).trim()).filter(Boolean))].slice(0, 40);
+
+  const dias = [...new Set(paraIA.map((h) => h.fecha))].sort().map((f) => {
+    const momentos = paraIA.filter((h) => h.fecha === f).map((h) => h.momento).join(" y ");
     return `${f} (${fechaCorta(f)}) → hay que poner: ${momentos}\n   ${lineaTurno("Rut", turnosRut.find((t) => t.fecha === f))} · ${lineaTurno("Alejandro", turnosAle.find((t) => t.fecha === f))}`;
   }).join("\n");
 
@@ -279,7 +334,7 @@ Ahora organizas su MENÚ de comidas y cenas. Reglas:
 - Piensa la cena de un día y la comida del día siguiente como UNA sesión de cocina por la noche: entre las dos, una hora como mucho, y mejor si comparten algún ingrediente o elaboración.
 - Mira los horarios de cada día: si Rut sale a las 20:30 o más tarde, esa noche todo rápido (cena de 20 minutos como mucho: un revuelto, una tortilla, pollo a la plancha con ensalada, unas fajitas…). Los días que libran los dos, algo con más fundamento para cocinar juntos: un buen guiso, un arroz… ("para dos").
 - Variedad: pollo unas tres veces por semana (nunca dos veces seguidas ni preparado igual), arroz al menos dos veces, legumbre 2 o 3 veces, como mucho un pescado y verdura todos los días.
-- Puedes repetir platos que les encantan o les gustan (lista de abajo, con su id) más o menos en uno de cada cuatro huecos, sin repetir ninguno que hayan comido en los últimos 10 días.
+- Sus platos FIJOS (⭐) son los suyos de siempre: ponlos a menudo, cada uno al menos una vez cada dos semanas si no están ya en el menú cerca. Los que les encantan o les gustan, puedes repetirlos más o menos en uno de cada cuatro huecos. En los dos casos, usa el id exacto en "reutilizar" y no repitas nada comido en los últimos 10 días.
 - Nunca propongas nada de lo que NO quieren.
 - Las recetas nuevas, para 2 raciones y SIN pasos (los pasos se piden aparte cuando los quieran ver).
 
@@ -291,7 +346,7 @@ ${dias}
 
 Platos que ya tienen en el menú cerca de estas fechas (no los repitas):
 ${yaEnMenu || "Ninguno."}
-
+${noRepetir.length ? `\nNo propongas estos platos ni nada casi igual (los acaban de descartar o ya están propuestos): ${noRepetir.join("; ")}\n` : ""}
 Platos suyos que puedes repetir (usa el id exacto en "reutilizar"):
 ${reutilizables || "Ninguno todavía."}
 ${deseo ? `\nLo que les apetece esta vez: ${deseo}` : ""}`;
@@ -342,26 +397,58 @@ ${deseo ? `\nLo que les apetece esta vez: ${deseo}` : ""}`;
   if (!salida) return { ok: false, error: "La IA no ha podido preparar el menú. Prueba otra vez." };
 
   // Solo vale lo que se ha pedido, y cada hueco una vez
-  const pedido = new Set(validos.map((h) => `${h.fecha}|${h.momento}`));
-  const hecho = new Set<string>();
-  const filas: { fecha: string; momento: Momento; receta_id: string; raciones: number; hecho: boolean; texto: null }[] = [];
-
+  const pedidoIA = new Set(paraIA.map(clavePlato));
   for (const r of salida.reutilizar ?? []) {
-    const k = `${r.fecha}|${r.momento}`;
-    if (!pedido.has(k) || hecho.has(k) || !nombrePorId.has(r.receta_id)) continue;
-    hecho.add(k);
-    filas.push({ fecha: r.fecha, momento: r.momento, receta_id: r.receta_id, raciones: 2, hecho: false, texto: null });
+    const k = clavePlato(r);
+    const receta = recetaPorId.get(r.receta_id);
+    if (!pedidoIA.has(k) || asignado.has(k) || !receta || receta.valoracion === "nunca") continue;
+    asignado.add(k);
+    propuestas.push({ fecha: r.fecha, momento: r.momento, receta_id: r.receta_id, receta: null });
+  }
+  for (const n of salida.nuevas ?? []) {
+    const k = clavePlato(n);
+    if (!pedidoIA.has(k) || asignado.has(k) || !n.receta) continue;
+    const receta = sanear(n.receta, false);
+    // Una receta con nueces no entra en el menú, aunque la IA la proponga
+    if (avisoAlergia(receta)) continue;
+    asignado.add(k);
+    propuestas.push({ fecha: n.fecha, momento: n.momento, receta_id: null, receta: { ...receta, origen: "ia" } });
   }
 
-  const nuevas = (salida.nuevas ?? [])
-    .map((n) => ({ ...n, receta: n.receta ? sanear(n.receta, false) : null }))
-    .filter((n): n is { fecha: string; momento: Momento; receta: RecetaNueva } => {
-      const k = `${n.fecha}|${n.momento}`;
-      // Una receta con nueces no entra en el menú, aunque la IA la proponga
-      if (!pedido.has(k) || hecho.has(k) || !n.receta || avisoAlergia(n.receta)) return false;
-      hecho.add(k);
-      return true;
-    });
+  propuestas.sort((a, b) => clavePlato(a).localeCompare(clavePlato(b)));
+  return { ok: true, propuestas };
+}
+
+/** Guarda propuestas: crea las recetas nuevas, las pone en el menú y limpia lo sustituido. */
+async function aplicar(propuestas: Propuesta[], quien: string): Promise<RespuestaCocina> {
+  const vistos = new Set<string>();
+  const validas = (Array.isArray(propuestas) ? propuestas : [])
+    .filter((p) => p && /^\d{4}-\d{2}-\d{2}$/.test(p.fecha) && (p.momento === "comida" || p.momento === "cena"))
+    .filter((p) => (typeof p.receta_id === "string" && p.receta_id) || (p.receta && typeof p.receta === "object"))
+    .filter((p) => { const k = clavePlato(p); if (vistos.has(k)) return false; vistos.add(k); return true; })
+    .slice(0, 60);
+  if (!validas.length) return { ok: false, error: "No hay nada que guardar." };
+
+  // Las recetas que se reutilizan tienen que existir
+  const ids = [...new Set(validas.map((p) => p.receta_id).filter((x): x is string => !!x))];
+  const existentes = new Set<string>();
+  if (ids.length) {
+    const { data } = await supabase.from("super_recetas").select("id").in("id", ids);
+    for (const r of (data ?? []) as { id: string }[]) existentes.add(r.id);
+  }
+
+  const filas: { fecha: string; momento: Momento; receta_id: string; raciones: number; hecho: boolean; texto: null }[] = [];
+  for (const p of validas) {
+    if (p.receta_id && existentes.has(p.receta_id)) {
+      filas.push({ fecha: p.fecha, momento: p.momento, receta_id: p.receta_id, raciones: 2, hecho: false, texto: null });
+    }
+  }
+
+  // Lo que llega del navegador se vuelve a sanear y a comprobar
+  const nuevas = validas
+    .filter((p) => !p.receta_id && p.receta)
+    .map((p) => ({ ...p, receta: sanear(p.receta as RecetaNueva, false) }))
+    .filter((p) => !avisoAlergia(p.receta));
 
   if (nuevas.length) {
     const { data, error } = await supabase
@@ -376,18 +463,22 @@ ${deseo ? `\nLo que les apetece esta vez: ${deseo}` : ""}`;
     });
   }
 
+  if (!filas.length) return { ok: false, error: "No se ha podido guardar nada." };
+
   // Lo que había en esos huecos antes de cambiarlo (cuando se rehace la semana)
-  const antes = ((cercano.data ?? []) as Hueco[])
-    .filter((h) => h.receta_id && hecho.has(`${h.fecha}|${h.momento}`))
+  const fechas = filas.map((f) => f.fecha).sort();
+  const { data: previos } = await supabase.from("super_plan").select("fecha, momento, receta_id")
+    .gte("fecha", fechas[0]).lte("fecha", fechas[fechas.length - 1]);
+  const claves = new Set(filas.map(clavePlato));
+  const antes = ((previos ?? []) as Hueco[])
+    .filter((h) => h.receta_id && claves.has(clavePlato(h)))
     .map((h) => h.receta_id as string);
 
-  if (filas.length) {
-    const { error } = await supabase.from("super_plan").upsert(filas, { onConflict: "fecha,momento" });
-    if (error) return { ok: false, error: "No se ha podido guardar el menú." };
-  }
+  const { error } = await supabase.from("super_plan").upsert(filas, { onConflict: "fecha,momento" });
+  if (error) return { ok: false, error: "No se ha podido guardar el menú." };
 
-  // Las recetas sustituidas que puso la IA y nadie llegó a cocinar ni valorar, fuera:
-  // así el recetario no se llena de platos que no quisisteis
+  // Las recetas sustituidas que puso la IA y nadie llegó a cocinar, valorar ni
+  // marcar como fijas, fuera: así el recetario no se llena de platos que no quisisteis
   const viejas = [...new Set(antes)].filter((id) => !filas.some((f) => f.receta_id === id));
   if (viejas.length) {
     const { data: siguen } = await supabase.from("super_plan").select("receta_id").in("receta_id", viejas);
@@ -395,11 +486,63 @@ ${deseo ? `\nLo que les apetece esta vez: ${deseo}` : ""}`;
     const sobran = viejas.filter((id) => !usadas.has(id));
     if (sobran.length) {
       await supabase.from("super_recetas").delete()
-        .in("id", sobran).eq("origen", "ia").eq("veces", 0).is("valoracion", null);
+        .in("id", sobran).eq("origen", "ia").eq("veces", 0).eq("fijo", false).is("valoracion", null);
     }
   }
 
   return { ok: true, rellenados: filas.length };
+}
+
+/** Proponer y guardar de una vez: para el 🔄 de un plato y para completar la compra. */
+async function plan(huecos: HuecoPedido[], deseo: string, quien: string): Promise<RespuestaCocina> {
+  const p = await proponer(huecos, deseo, []);
+  if (!p.ok) return p;
+  if (!p.propuestas.length) return { ok: false, error: "La IA no ha propuesto nada. Prueba otra vez." };
+  return aplicar(p.propuestas, quien);
+}
+
+/* ─── un plato desde una foto ──────────────────────────────── */
+
+async function desdeFoto(fotoUrl: string, texto: string): Promise<RespuestaCocina> {
+  // Solo fotos subidas a la propia app
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  let url: URL;
+  try {
+    url = new URL(fotoUrl);
+  } catch {
+    return { ok: false, error: "Esa foto no se puede abrir." };
+  }
+  if (!base || url.origin !== new URL(base).origin || !url.pathname.includes("/storage/v1/object/public/")) {
+    return { ok: false, error: "Esa foto no es de la app." };
+  }
+
+  const sistemaBase = await voz(hoyEnMadrid());
+  const salida = await pedir<{ encontrada: boolean; receta: RecetaNueva }>({
+    system: `${sistemaBase}
+
+Te enseñan la foto de un plato que han cocinado ELLOS en casa. Reconócelo y escribe su receta como la harían en casa: 2 raciones, ingredientes con cantidades, pasos y valores nutricionales por ración estimados a partir de lo que se ve.
+- Es su plato: respétalo tal cual aunque no siga las normas de estilo de arriba.
+- Si te dicen qué es o cómo lo hicieron, hazles caso por encima de lo que veas.
+- Si en la foto no hay comida, pon "encontrada" a false y rellena lo demás con lo mínimo.`,
+    usuario: [
+      { type: "image", source: { type: "url", url: url.toString() } },
+      { type: "text", text: texto.trim() ? `Lo que nos cuentan: ${texto.trim().slice(0, 500)}` : "¿Qué plato es y cómo se hace?" },
+    ],
+    effort: "low",
+    maxTokens: 6000,
+    esquema: {
+      type: "object", additionalProperties: false,
+      required: ["encontrada", "receta"],
+      properties: { encontrada: { type: "boolean" }, receta: RECETA_COMPLETA },
+    },
+  });
+
+  if (!salida) return { ok: false, error: "La IA no ha podido ver la foto. Prueba otra vez." };
+  if (!salida.encontrada) return { ok: false, error: "En esa foto no veo ningún plato. Prueba con otra." };
+  return {
+    ok: true,
+    recetas: [conAviso({ ...sanear(salida.receta, true), origen: "nuestra", foto_url: url.toString(), valoracion: "encanta" })],
+  };
 }
 
 /* ─── nevera ───────────────────────────────────────────────── */
@@ -815,6 +958,17 @@ export async function POST(req: NextRequest) {
   switch (p.accion) {
     case "plan":
       respuesta = await plan(Array.isArray(p.huecos) ? p.huecos : [], String(p.deseo ?? "").slice(0, 500), quien);
+      break;
+    case "proponer": {
+      const evitar = Array.isArray(p.evitar) ? p.evitar.map((x) => String(x).slice(0, 120)) : [];
+      respuesta = await proponer(Array.isArray(p.huecos) ? p.huecos : [], String(p.deseo ?? "").slice(0, 500), evitar);
+      break;
+    }
+    case "aplicar":
+      respuesta = await aplicar(Array.isArray(p.propuestas) ? p.propuestas : [], quien);
+      break;
+    case "foto":
+      respuesta = await desdeFoto(String(p.foto_url ?? ""), String(p.texto ?? ""));
       break;
     case "nevera":
       respuesta = await desdeNevera(String(p.deseo ?? "").slice(0, 500));

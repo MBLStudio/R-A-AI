@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { BCN } from "@/lib/barcelona/types";
-import { diasDeSemana, fechaCorta, lunesDe, sumarDias } from "@/lib/barcelona/trabajo";
+import { diasDeSemana, fechaCorta, fechaLarga, lunesDe, sumarDias } from "@/lib/barcelona/trabajo";
 import {
   ACTIVIDAD, EQUIPOS, MOMENTOS, necesidades, parteComidaYCena, guardarPerfil, guardarEquipos, pedirACocina,
   type Actividad, type Equipo, type Hueco, type Momento, type Perfil, type ResumenSemana, type SesionBatch,
+  type Propuesta, type Receta,
 } from "@/lib/barcelona/super";
 import { Hoja, Campo, Boton, estiloInput } from "../Shell";
-import { BotonIA, Pensando, Aviso, Etiqueta, VERDE } from "./Comun";
+import { BotonIA, Pensando, Aviso, Etiqueta, Portada, Nutri, VERDE } from "./Comun";
 
 /* ═══════════════════════════════════════════════════════════
    Lo que comparten varias pestañas: rellenar el menú con la IA,
@@ -62,52 +63,144 @@ export async function rellenarConIA(
   return { rellenados, error: null };
 }
 
-/** La hoja de "Planificar con la IA": qué os apetece y a rellenar. */
-export function HojaPlanificar({ abierta, huecos, ocupados = [], quien, onCerrar, onHecho }: {
+/**
+ * Pide propuestas a la IA sin guardar nada, de semana en semana.
+ * Lo ya propuesto se le pasa a la siguiente tanda para no repetir.
+ */
+async function proponerConIA(
+  huecos: { fecha: string; momento: Momento }[],
+  deseo: string,
+  quien: string,
+  nombreDe: (p: Propuesta) => string,
+  onProgreso: (hechas: number, total: number) => void,
+): Promise<{ propuestas: Propuesta[]; error: string | null }> {
+  const tandas: { fecha: string; momento: Momento }[][] = [];
+  for (const h of [...huecos].sort((a, b) => a.fecha.localeCompare(b.fecha))) {
+    const ultima = tandas[tandas.length - 1];
+    if (ultima && ultima.length < 14 && h.fecha < sumarDias(ultima[0].fecha, 7)) ultima.push(h);
+    else tandas.push([h]);
+  }
+  const propuestas: Propuesta[] = [];
+  for (let i = 0; i < tandas.length; i++) {
+    onProgreso(i, tandas.length);
+    const res = await pedirACocina({ accion: "proponer", huecos: tandas[i], deseo, evitar: propuestas.map(nombreDe) }, quien);
+    if (!res.ok) return { propuestas, error: res.error };
+    propuestas.push(...(res.propuestas ?? []));
+  }
+  onProgreso(tandas.length, tandas.length);
+  return { propuestas, error: null };
+}
+
+type Paso = "elegir" | "pensando" | "revisar" | "guardando";
+type Revisable = Propuesta & { fuera: boolean };
+
+const clave = (h: { fecha: string; momento: string }) => `${h.fecha}|${h.momento}`;
+
+/**
+ * Planificar con la IA, en dos pasos: primero propone y lo veis todo,
+ * con 🔄 para cambiar un plato y ✕ para quitarlo; luego se guarda.
+ */
+export function HojaPlanificar({ abierta, huecos, ocupados = [], recetas, quien, onCerrar, onHecho }: {
   abierta: boolean;
   /** Los huecos sin plato. */
   huecos: { fecha: string; momento: Momento }[];
   /** Los que ya tienen plato y se pueden rehacer (los no cocinados). */
   ocupados?: { fecha: string; momento: Momento }[];
+  recetas: Receta[];
   quien: string;
   onCerrar: () => void;
   onHecho: () => void;
 }) {
+  const [paso, setPaso] = useState<Paso>("elegir");
   const [deseo, setDeseo] = useState("");
   const [rehacer, setRehacer] = useState(false);
-  const [progreso, setProgreso] = useState<{ hechas: number; total: number } | null>(null);
+  const [progreso, setProgreso] = useState<{ hechas: number; total: number }>({ hechas: 0, total: 1 });
+  const [propuestas, setPropuestas] = useState<Revisable[]>([]);
+  const [cambiando, setCambiando] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => { if (abierta) { setError(null); setProgreso(null); setRehacer(huecos.length === 0 && ocupados.length > 0); } }, [abierta, huecos.length, ocupados.length]);
+  useEffect(() => {
+    if (!abierta) return;
+    setPaso("elegir");
+    setError(null);
+    setPropuestas([]);
+    setCambiando(null);
+    setRehacer(huecos.length === 0 && ocupados.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abierta]);
+
+  const porId = new Map(recetas.map((r) => [r.id, r]));
+  const recetaDe = (p: Propuesta) => (p.receta_id ? porId.get(p.receta_id) ?? null : p.receta);
+  const nombreDe = (p: Propuesta) => recetaDe(p)?.nombre ?? "";
 
   const todos = rehacer ? [...huecos, ...ocupados] : huecos;
+  const dentro = propuestas.filter((p) => !p.fuera);
 
-  const empezar = async () => {
+  const proponer = async () => {
     setError(null);
-    setProgreso({ hechas: 0, total: 1 });
-    const res = await rellenarConIA(todos, deseo.trim(), quien, (hechas, total) => setProgreso({ hechas, total }));
-    setProgreso(null);
-    if (res.error) { setError(res.error); if (res.rellenados) onHecho(); return; }
+    setPaso("pensando");
+    const res = await proponerConIA(todos, deseo.trim(), quien, nombreDe, (hechas, total) => setProgreso({ hechas, total }));
+    if (!res.propuestas.length) {
+      setError(res.error ?? "La IA no ha propuesto nada. Prueba otra vez.");
+      setPaso("elegir");
+      return;
+    }
+    if (res.error) setError(`${res.error} Os enseño lo que ha dado tiempo a preparar.`);
+    setPropuestas(res.propuestas.map((p) => ({ ...p, fuera: false })));
+    setPaso("revisar");
+  };
+
+  /** 🔄 Otra idea para un plato, sin repetir nada de lo propuesto. */
+  const otra = async (p: Revisable) => {
+    const k = clave(p);
+    setCambiando(k);
+    setError(null);
+    const res = await pedirACocina({
+      accion: "proponer",
+      huecos: [{ fecha: p.fecha, momento: p.momento }],
+      deseo: deseo.trim(),
+      evitar: propuestas.map(nombreDe),
+    }, quien);
+    setCambiando(null);
+    const nueva = res.ok ? res.propuestas?.[0] : null;
+    if (!nueva) return setError(res.ok ? "No ha salido otra idea. Prueba otra vez." : res.error);
+    setPropuestas((prev) => prev.map((x) => (clave(x) === k ? { ...nueva, fuera: false } : x)));
+  };
+
+  const guardar = async () => {
+    setPaso("guardando");
+    setError(null);
+    const res = await pedirACocina({ accion: "aplicar", propuestas: dentro.map((x) => ({ fecha: x.fecha, momento: x.momento, receta_id: x.receta_id, receta: x.receta })) }, quien);
+    if (!res.ok) {
+      setError(res.error);
+      setPaso("revisar");
+      return;
+    }
     onHecho();
     onCerrar();
   };
 
   const ideas = ["Más pollo", "Arroces", "Algo de cuchara", "Platos de la abuela", "Cenas ligeras", "Pasta"];
+  const ocupado = paso === "pensando" || paso === "guardando";
 
   return (
-    <Hoja abierta={abierta} onCerrar={() => { if (!progreso) onCerrar(); }} titulo="Planificar con la IA">
-      {progreso ? (
+    <Hoja abierta={abierta} onCerrar={() => { if (!ocupado) onCerrar(); }} titulo={paso === "revisar" ? "Vuestra semana" : "Planificar con la IA"}>
+      {paso === "pensando" && (
         <>
           <Pensando texto={progreso.total > 1 ? `Semana ${Math.min(progreso.hechas + 1, progreso.total)} de ${progreso.total}` : "Preparando vuestro menú"} />
           <p style={{ fontSize: 12.5, color: BCN.humo, textAlign: "center", margin: 0 }}>Tarda un poquito: está pensando cada plato 🙂</p>
         </>
-      ) : (
+      )}
+
+      {paso === "guardando" && <Pensando texto="Guardando vuestra semana" />}
+
+      {paso === "elegir" && (
         <>
           <p style={{ fontSize: 14, color: BCN.tinta, margin: "0 0 14px", lineHeight: 1.5 }}>
             {huecos.length === 0
               ? "No queda ningún hueco libre en estos días."
               : <>Hay <strong>{huecos.length} {huecos.length === 1 ? "hueco" : "huecos"}</strong> sin plato.</>}
-            {" "}Tiene en cuenta vuestros horarios, lo que os gusta y que la comida va en tupper.
+            {" "}Os propone la semana y la veis antes de guardarla.
           </p>
 
           {ocupados.length > 0 && (
@@ -116,11 +209,7 @@ export function HojaPlanificar({ abierta, huecos, ocupados = [], quien, onCerrar
                 width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 14, cursor: "pointer", textAlign: "left",
                 border: `1.5px solid ${rehacer ? VERDE : BCN.arenaOsc}`, background: rehacer ? `${VERDE}10` : "white", marginBottom: 14,
               }}>
-              <span style={{
-                width: 22, height: 22, borderRadius: 7, flexShrink: 0, border: `2px solid ${rehacer ? VERDE : BCN.arenaOsc}`,
-                background: rehacer ? VERDE : "white", color: "white", fontSize: 13, fontWeight: 800,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>{rehacer ? "✓" : ""}</span>
+              <Casilla marcada={rehacer} />
               <span>
                 <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: BCN.tinta }}>
                   Rehacer también lo que ya hay ({ocupados.length} {ocupados.length === 1 ? "plato" : "platos"})
@@ -144,14 +233,106 @@ export function HojaPlanificar({ abierta, huecos, ocupados = [], quien, onCerrar
                 ))}
               </div>
               {error && <div style={{ marginBottom: 10 }}><Aviso>{error}</Aviso></div>}
-              <BotonIA onClick={empezar}>
-                {rehacer ? `Rehacer ${todos.length} ${todos.length === 1 ? "plato" : "platos"}` : `Rellenar ${todos.length} ${todos.length === 1 ? "hueco" : "huecos"}`}
+              <BotonIA onClick={proponer}>
+                Proponer {todos.length} {todos.length === 1 ? "plato" : "platos"}
               </BotonIA>
             </>
           )}
         </>
       )}
+
+      {paso === "revisar" && (
+        <>
+          <p style={{ fontSize: 13, color: BCN.humo, margin: "-8px 0 14px", lineHeight: 1.45 }}>
+            🔄 para otra idea, ✕ para quitar un plato. Hasta que no guardéis, no cambia nada.
+          </p>
+          {error && <div style={{ marginBottom: 10 }}><Aviso>{error}</Aviso></div>}
+
+          {[...new Set(propuestas.map((p) => p.fecha))].sort().map((f) => (
+            <div key={f} style={{ marginBottom: 12 }}>
+              <p style={{ fontFamily: "Georgia, serif", fontSize: 15.5, color: BCN.tinta, margin: "0 0 6px 3px" }}>{fechaLarga(f)}</p>
+              <div style={{ background: "white", borderRadius: 14, border: `1px solid ${BCN.arenaOsc}`, overflow: "hidden" }}>
+                {propuestas.filter((p) => p.fecha === f).sort((a, b) => (a.momento === "comida" ? 0 : 1) - (b.momento === "comida" ? 0 : 1)).map((p, i, lista) => {
+                  const r = recetaDe(p);
+                  const k = clave(p);
+                  const fijo = p.receta_id ? porId.get(p.receta_id)?.fijo : false;
+                  return (
+                    <div key={k} style={{
+                      display: "flex", alignItems: "center", gap: 10, padding: "9px 8px 9px 10px",
+                      borderBottom: i === lista.length - 1 ? "none" : `1px solid ${BCN.arena}`,
+                      opacity: p.fuera ? 0.4 : 1,
+                    }}>
+                      <div style={{ width: 46 }}>
+                        {r ? <Portada receta={r} alto={46} radio={10} emoji={22} /> : <div style={{ height: 46 }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 10.5, fontWeight: 800, color: BCN.humo, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>
+                          {MOMENTOS[p.momento].icon} {p.momento === "comida" ? "Comida · tupper" : "Cena"}
+                          {p.receta_id ? (fijo ? " · ⭐ fijo" : " · vuestro") : " · nuevo"}
+                        </p>
+                        {cambiando === k ? (
+                          <p style={{ fontSize: 14, color: BCN.humo, margin: "2px 0 0" }}>Buscando otra idea…</p>
+                        ) : (
+                          <>
+                            <p style={{ fontSize: 14.5, fontWeight: 600, color: BCN.tinta, margin: "1px 0 0", textDecoration: p.fuera ? "line-through" : "none" }}>
+                              {r?.nombre ?? "—"}
+                            </p>
+                            {r && <Nutri r={r} />}
+                          </>
+                        )}
+                      </div>
+                      <BotonRedondo onClick={() => otra(p)} disabled={cambiando !== null || p.fuera} etiqueta="Otra idea">🔄</BotonRedondo>
+                      <BotonRedondo
+                        onClick={() => setPropuestas((prev) => prev.map((x) => (clave(x) === k ? { ...x, fuera: !x.fuera } : x)))}
+                        disabled={cambiando === k} etiqueta={p.fuera ? "Volver a poner" : "Quitar"}>
+                        {p.fuera ? "↩︎" : "✕"}
+                      </BotonRedondo>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Guardar, siempre a la vista */}
+          <div style={{
+            position: "sticky", bottom: "calc(-24px - env(safe-area-inset-bottom))",
+            marginTop: 8, marginBottom: "calc(-24px - env(safe-area-inset-bottom))",
+            padding: "12px 0", paddingBottom: "calc(24px + env(safe-area-inset-bottom))",
+            background: BCN.arena, boxShadow: `0 -10px 14px ${BCN.arena}`,
+          }}>
+            <Boton onClick={guardar} disabled={dentro.length === 0 || cambiando !== null} color={VERDE}>
+              Guardar {dentro.length} {dentro.length === 1 ? "plato" : "platos"}
+            </Boton>
+          </div>
+        </>
+      )}
     </Hoja>
+  );
+}
+
+function Casilla({ marcada }: { marcada: boolean }) {
+  return (
+    <span style={{
+      width: 22, height: 22, borderRadius: 7, flexShrink: 0, border: `2px solid ${marcada ? VERDE : BCN.arenaOsc}`,
+      background: marcada ? VERDE : "white", color: "white", fontSize: 13, fontWeight: 800,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>{marcada ? "✓" : ""}</span>
+  );
+}
+
+function BotonRedondo({ children, onClick, disabled, etiqueta }: {
+  children: React.ReactNode; onClick: () => void; disabled?: boolean; etiqueta: string;
+}) {
+  return (
+    <motion.button whileTap={{ scale: 0.88 }} onClick={onClick} disabled={disabled} aria-label={etiqueta}
+      style={{
+        width: 34, height: 34, borderRadius: "50%", flexShrink: 0, cursor: disabled ? "default" : "pointer",
+        border: `1px solid ${BCN.arenaOsc}`, background: "white", fontSize: 15, opacity: disabled ? 0.4 : 1,
+        display: "flex", alignItems: "center", justifyContent: "center", color: BCN.tinta,
+      }}>
+      {children}
+    </motion.button>
   );
 }
 

@@ -33,6 +33,9 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
   const [editando, setEditando] = useState<{ fecha: string; momento: Momento } | null>(null);
   const [planificando, setPlanificando] = useState(false);
   const [batch, setBatch] = useState<{ desde: string; hasta: string } | null>(null);
+  // El plato que se está cambiando con 🔄, y si ha fallado
+  const [cambiando, setCambiando] = useState<string | null>(null);
+  const [fallo, setFallo] = useState<string | null>(null);
 
   const dias = semanaDe(lunes).dias;
   const domingo = dias[6];
@@ -61,6 +64,16 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
     .map((h) => ({ fecha: h.fecha, momento: h.momento }));
 
   const recargar = () => { cargar(); onCambio(); };
+
+  /** 🔄 Otra idea para un plato, al momento y sin abrir nada. */
+  const otra = async (fecha: string, momento: Momento) => {
+    setCambiando(`${fecha}|${momento}`);
+    setFallo(null);
+    const res = await pedirACocina({ accion: "plan", huecos: [{ fecha, momento }] }, quien);
+    setCambiando(null);
+    if (!res.ok) return setFallo(res.error);
+    recargar();
+  };
 
   return (
     <div>
@@ -93,6 +106,8 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
           </motion.button>
         </div>
       )}
+
+      {fallo && <div style={{ marginBottom: 10 }}><Aviso>{fallo}</Aviso></div>}
 
       {/* Días */}
       <AnimatePresence mode="wait" initial={false}>
@@ -128,12 +143,19 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
                   {horario("Rut", turnos.rut.find((t) => t.fecha === f))} · {horario("Ale", turnos.alejandro.find((t) => t.fecha === f))}
                 </p>
 
-                {(["comida", "cena"] as Momento[]).map((m) => (
-                  <Plato key={m} momento={m} hueco={m === "comida" ? comida : cena}
-                    receta={(m === "comida" ? comida : cena)?.receta_id ? porId.get((m === "comida" ? comida : cena)!.receta_id!) ?? null : null}
-                    cargando={cargando}
-                    onTocar={() => setEditando({ fecha: f, momento: m })} />
-                ))}
+                {(["comida", "cena"] as Momento[]).map((m) => {
+                  const h = m === "comida" ? comida : cena;
+                  // La comida de hoy ya se cocinó anoche: esa no se cambia con 🔄
+                  const cambiable = !pasado && !h?.hecho && !h?.texto && !(esHoy && m === "comida");
+                  return (
+                    <Plato key={m} momento={m} hueco={h}
+                      receta={h?.receta_id ? porId.get(h.receta_id) ?? null : null}
+                      cargando={cargando}
+                      cambiando={cambiando === `${f}|${m}`}
+                      onOtra={cambiable && !cambiando ? () => otra(f, m) : null}
+                      onTocar={() => setEditando({ fecha: f, momento: m })} />
+                  );
+                })}
 
                 {!pasado && minutosNoche > 0 && (
                   <p style={{ fontSize: 11.5, color: VERDE, fontWeight: 600, margin: "6px 2px 0" }}>
@@ -159,7 +181,7 @@ export function TabMenu({ hoy, quien, recetas, version, onCambio, abrirReceta }:
         onCambio={recargar}
         abrirReceta={abrirReceta}
       />
-      <HojaPlanificar abierta={planificando} huecos={libres} ocupados={ocupados} quien={quien} onCerrar={() => setPlanificando(false)} onHecho={recargar} />
+      <HojaPlanificar abierta={planificando} huecos={libres} ocupados={ocupados} recetas={recetas} quien={quien} onCerrar={() => setPlanificando(false)} onHecho={recargar} />
       <HojaBatch rango={batch} quien={quien} onCerrar={() => setBatch(null)} />
     </div>
   );
@@ -173,47 +195,67 @@ function horario(nombre: string, t: Turno | undefined): string {
 
 /* ─── Un plato en el día ───────────────────────────────────── */
 
-function Plato({ momento, hueco, receta, cargando, onTocar }: {
-  momento: Momento; hueco: Hueco | null; receta: Receta | null; cargando: boolean; onTocar: () => void;
+function Plato({ momento, hueco, receta, cargando, cambiando, onTocar, onOtra }: {
+  momento: Momento; hueco: Hueco | null; receta: Receta | null; cargando: boolean; cambiando: boolean;
+  onTocar: () => void;
+  /** null = este plato no se puede cambiar con 🔄 */
+  onOtra: (() => void) | null;
 }) {
   const etiqueta = momento === "comida" ? "Comida · tupper" : "Cena";
   return (
-    <motion.button whileTap={{ scale: 0.98 }} onClick={onTocar}
-      style={{
-        width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "6px 4px", marginBottom: 4,
-        background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
-      }}>
-      {receta ? (
-        <div style={{ width: 50, flexShrink: 0 }}><Portada receta={receta} alto={50} radio={12} emoji={24} /></div>
-      ) : (
-        <div style={{
-          width: 50, height: 50, borderRadius: 12, flexShrink: 0, border: `1.5px dashed ${BCN.arenaOsc}`,
-          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, background: BCN.arena,
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+      <motion.button whileTap={{ scale: 0.98 }} onClick={onTocar} disabled={cambiando}
+        style={{
+          flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10, padding: "6px 4px",
+          background: "transparent", border: "none", cursor: "pointer", textAlign: "left",
         }}>
-          {hueco?.texto ? "📝" : MOMENTOS[momento].icon}
-        </div>
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 10.5, fontWeight: 800, color: BCN.humo, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>
-          {etiqueta}
-        </p>
-        {cargando ? (
-          <div style={{ height: 11, width: "60%", borderRadius: 6, background: BCN.arenaOsc, opacity: 0.6, marginTop: 5 }} />
-        ) : receta ? (
-          <>
-            <p style={{ fontSize: 14.5, fontWeight: 600, color: BCN.tinta, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: hueco?.hecho ? "none" : "none" }}>
-              {receta.nombre}
-            </p>
-            <Nutri r={receta} />
-          </>
-        ) : hueco?.texto ? (
-          <p style={{ fontSize: 14.5, color: BCN.tinta, margin: "1px 0 0", fontStyle: "italic" }}>{hueco.texto}</p>
+        {receta && !cambiando ? (
+          <div style={{ width: 50, flexShrink: 0 }}><Portada receta={receta} alto={50} radio={12} emoji={24} /></div>
         ) : (
-          <p style={{ fontSize: 13.5, color: BCN.humo, margin: "1px 0 0" }}>Sin decidir · tocar para elegir</p>
+          <div style={{
+            width: 50, height: 50, borderRadius: 12, flexShrink: 0, border: `1.5px dashed ${BCN.arenaOsc}`,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, background: BCN.arena,
+          }}>
+            {cambiando ? (
+              <motion.span animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block" }}>🔄</motion.span>
+            ) : hueco?.texto ? "📝" : MOMENTOS[momento].icon}
+          </div>
         )}
-      </div>
-      {hueco?.hecho && <span style={{ fontSize: 15 }} title="Cocinado">✅</span>}
-    </motion.button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 10.5, fontWeight: 800, color: BCN.humo, textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>
+            {etiqueta}
+          </p>
+          {cargando ? (
+            <div style={{ height: 11, width: "60%", borderRadius: 6, background: BCN.arenaOsc, opacity: 0.6, marginTop: 5 }} />
+          ) : cambiando ? (
+            <p style={{ fontSize: 13.5, color: BCN.humo, margin: "1px 0 0" }}>Buscando otra idea…</p>
+          ) : receta ? (
+            <>
+              <p style={{ fontSize: 14.5, fontWeight: 600, color: BCN.tinta, margin: "1px 0 0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {receta.fijo ? "⭐ " : ""}{receta.nombre}
+              </p>
+              <Nutri r={receta} />
+            </>
+          ) : hueco?.texto ? (
+            <p style={{ fontSize: 14.5, color: BCN.tinta, margin: "1px 0 0", fontStyle: "italic" }}>{hueco.texto}</p>
+          ) : (
+            <p style={{ fontSize: 13.5, color: BCN.humo, margin: "1px 0 0" }}>Sin decidir · tocar para elegir</p>
+          )}
+        </div>
+        {hueco?.hecho && <span style={{ fontSize: 15 }} title="Cocinado">✅</span>}
+      </motion.button>
+
+      {onOtra && !cargando && (
+        <motion.button whileTap={{ scale: 0.85, rotate: 90 }} onClick={onOtra} aria-label="Otra idea"
+          style={{
+            width: 34, height: 34, borderRadius: "50%", flexShrink: 0, cursor: "pointer",
+            border: `1px solid ${BCN.arenaOsc}`, background: "white", fontSize: 15,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+          {receta ? "🔄" : "✨"}
+        </motion.button>
+      )}
+    </div>
   );
 }
 

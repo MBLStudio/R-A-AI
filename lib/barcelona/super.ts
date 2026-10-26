@@ -51,6 +51,10 @@ export interface Receta {
   nota: string | null;
   veces: number;
   ultima_vez: string | null;
+  /** De los vuestros: la IA lo va poniendo en el menú a menudo. */
+  fijo: boolean;
+  /** Día de la semana preferido para un fijo (1 = lunes … 7 = domingo). */
+  dia_fijo: number | null;
   creada_por: string | null;
   created_at: string;
 }
@@ -61,7 +65,17 @@ export type RecetaNueva = Pick<
   "nombre" | "descripcion" | "raciones" | "tiempo_min" | "dificultad" | "kcal_racion" |
   "proteinas_racion" | "hidratos_racion" | "grasas_racion" | "fibra_racion" |
   "ingredientes" | "pasos" | "etiquetas"
-> & Partial<Pick<Receta, "origen" | "enlace" | "foto_url" | "nota">>;
+> & Partial<Pick<Receta, "origen" | "enlace" | "foto_url" | "nota" | "valoracion">>;
+
+/** Un plato que propone la IA para un hueco: uno vuestro (receta_id) o uno nuevo (receta). */
+export interface Propuesta {
+  fecha: string;
+  momento: Momento;
+  receta_id: string | null;
+  receta: RecetaNueva | null;
+}
+
+export const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 export interface Hueco {
   id: string;
@@ -609,6 +623,9 @@ export interface ResumenSemana {
 
 export type PeticionCocina =
   | { accion: "plan"; huecos: { fecha: string; momento: Momento }[]; deseo?: string }
+  | { accion: "proponer"; huecos: { fecha: string; momento: Momento }[]; deseo?: string; evitar?: string[] }
+  | { accion: "aplicar"; propuestas: Propuesta[] }
+  | { accion: "foto"; foto_url: string; texto?: string }
   | { accion: "nevera"; deseo?: string }
   | { accion: "receta"; texto: string }
   | { accion: "importar"; texto: string }
@@ -617,7 +634,7 @@ export type PeticionCocina =
   | { accion: "resumen"; lunes: string };
 
 export type RespuestaCocina =
-  | { ok: true; recetas?: RecetaNueva[]; receta?: Receta; rellenados?: number; batch?: SesionBatch; resumen?: ResumenSemana }
+  | { ok: true; recetas?: RecetaNueva[]; receta?: Receta; rellenados?: number; batch?: SesionBatch; resumen?: ResumenSemana; propuestas?: Propuesta[] }
   | { ok: false; error: string };
 
 export async function pedirACocina(p: PeticionCocina, quien: string): Promise<RespuestaCocina> {

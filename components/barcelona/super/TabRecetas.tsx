@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { BCN } from "@/lib/barcelona/types";
+import { subirFoto } from "@/lib/upload";
 import { VALORACION, avisoAlergia, pedirACocina, type Receta, type RecetaNueva } from "@/lib/barcelona/super";
 import { Hoja, Vacio, estiloInput } from "../Shell";
 import { Portada, Nutri, BotonIA, Pensando, Aviso, VERDE } from "./Comun";
@@ -13,11 +14,12 @@ import { Portada, Nutri, BotonIA, Pensando, Aviso, VERDE } from "./Comun";
    encanta arriba y lo de "nunca más" apartado.
    ═══════════════════════════════════════════════════════════ */
 
-type Filtro = "todas" | "encanta" | "probar" | "nunca";
+type Filtro = "todas" | "encanta" | "fijos" | "probar" | "nunca";
 
 const FILTROS: { valor: Filtro; label: string }[] = [
   { valor: "todas", label: "Todas" },
   { valor: "encanta", label: "❤️ Favoritas" },
+  { valor: "fijos", label: "⭐ Fijos" },
   { valor: "probar", label: "✨ Por probar" },
   { valor: "nunca", label: "👎 Nunca más" },
 ];
@@ -30,12 +32,13 @@ export function TabRecetas({ recetas, quien, abrirReceta, abrirPrevia }: {
 }) {
   const [filtro, setFiltro] = useState<Filtro>("todas");
   const [busqueda, setBusqueda] = useState("");
-  const [nueva, setNueva] = useState(false);
+  const [nueva, setNueva] = useState<Modo | null>(null);
 
   const visibles = recetas
     .filter((r) =>
       filtro === "todas" ? r.valoracion !== "nunca" :
       filtro === "encanta" ? r.valoracion === "encanta" :
+      filtro === "fijos" ? r.fijo :
       filtro === "probar" ? r.veces === 0 && r.valoracion === null :
       r.valoracion === "nunca")
     .filter((r) => {
@@ -53,7 +56,7 @@ export function TabRecetas({ recetas, quien, abrirReceta, abrirPrevia }: {
       <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
         <input value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
           placeholder="🔍 Buscar plato o ingrediente" style={{ ...estiloInput, flex: 1 }} />
-        <motion.button whileTap={{ scale: 0.95 }} onClick={() => setNueva(true)}
+        <motion.button whileTap={{ scale: 0.95 }} onClick={() => setNueva("idea")}
           style={{
             padding: "0 16px", borderRadius: 12, border: "none", cursor: "pointer", flexShrink: 0,
             background: VERDE, color: "white", fontSize: 14, fontWeight: 700,
@@ -61,6 +64,19 @@ export function TabRecetas({ recetas, quien, abrirReceta, abrirPrevia }: {
           + Nueva
         </motion.button>
       </div>
+
+      <motion.button whileTap={{ scale: 0.98 }} onClick={() => setNueva("foto")}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 12, borderRadius: 16,
+          border: `1px solid ${BCN.sol}55`, background: `${BCN.sol}12`, cursor: "pointer", textAlign: "left",
+        }}>
+        <span style={{ fontSize: 24 }}>📷</span>
+        <span style={{ flex: 1 }}>
+          <span style={{ display: "block", fontSize: 14.5, fontWeight: 700, color: BCN.tinta }}>¿Habéis cocinado algo rico?</span>
+          <span style={{ display: "block", fontSize: 12.5, color: BCN.humo }}>Hacedle una foto y se guarda con su receta en vuestras favoritas</span>
+        </span>
+        <span style={{ color: BCN.humo, fontSize: 18 }}>›</span>
+      </motion.button>
 
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, marginBottom: 12 }}>
         {FILTROS.map((f) => {
@@ -82,7 +98,7 @@ export function TabRecetas({ recetas, quien, abrirReceta, abrirPrevia }: {
         recetas.length === 0 ? (
           <Vacio icon="📖" titulo="Vuestro recetario está vacío"
             texto="Pedid una receta a la IA, pegad un enlace de TikTok o planificad la semana y se irá llenando solo."
-            accion={{ label: "Añadir la primera", onClick: () => setNueva(true) }} />
+            accion={{ label: "Añadir la primera", onClick: () => setNueva("idea") }} />
         ) : (
           <p style={{ fontSize: 14, color: BCN.humo, textAlign: "center", padding: "30px 10px" }}>Nada por aquí con ese filtro.</p>
         )
@@ -98,9 +114,9 @@ export function TabRecetas({ recetas, quien, abrirReceta, abrirPrevia }: {
               }}>
               <div style={{ position: "relative" }}>
                 <Portada receta={r} alto={104} radio={0} emoji={40} />
-                {r.valoracion && (
+                {(r.valoracion || r.fijo) && (
                   <span style={{ position: "absolute", top: 7, right: 7, fontSize: 14, background: "rgba(255,255,255,0.9)", borderRadius: 12, padding: "2px 6px" }}>
-                    {VALORACION[r.valoracion].icon}
+                    {r.fijo ? "⭐" : ""}{r.valoracion ? VALORACION[r.valoracion].icon : ""}
                   </span>
                 )}
                 {avisoAlergia(r) && (
@@ -123,34 +139,63 @@ export function TabRecetas({ recetas, quien, abrirReceta, abrirPrevia }: {
         </div>
       )}
 
-      <HojaNueva abierta={nueva} quien={quien} onCerrar={() => setNueva(false)}
-        onLista={(r) => { setNueva(false); abrirPrevia(r); }} />
+      <HojaNueva modoInicial={nueva} quien={quien} onCerrar={() => setNueva(null)}
+        onLista={(r) => { setNueva(null); abrirPrevia(r); }} />
     </div>
   );
 }
 
 /* ─── Nueva receta ─────────────────────────────────────────── */
 
-type Modo = "idea" | "enlace";
+type Modo = "idea" | "enlace" | "foto";
 
-function HojaNueva({ abierta, quien, onCerrar, onLista }: {
-  abierta: boolean;
+const MODOS: [Modo, string][] = [["idea", "✨ Idea"], ["enlace", "🔗 Enlace"], ["foto", "📷 Foto"]];
+
+function HojaNueva({ modoInicial, quien, onCerrar, onLista }: {
+  /** null = cerrada */
+  modoInicial: Modo | null;
   quien: string;
   onCerrar: () => void;
   onLista: (r: RecetaNueva) => void;
 }) {
+  const abierta = modoInicial !== null;
   const [modo, setModo] = useState<Modo>("idea");
   const [texto, setTexto] = useState("");
+  const [foto, setFoto] = useState<File | null>(null);
+  const [vista, setVista] = useState<string | null>(null);
   const [pensando, setPensando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const refFoto = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (abierta) { setTexto(""); setError(null); setPensando(false); } }, [abierta]);
+  useEffect(() => {
+    if (!abierta) return;
+    setModo(modoInicial ?? "idea");
+    setTexto(""); setFoto(null); setVista(null); setError(null); setPensando(false);
+  }, [abierta, modoInicial]);
+
+  // La vista previa de la foto se libera al cambiarla
+  useEffect(() => () => { if (vista) URL.revokeObjectURL(vista); }, [vista]);
+
+  const elegirFoto = (f: File) => {
+    setFoto(f);
+    setVista(URL.createObjectURL(f));
+    setError(null);
+  };
+
+  const listo = modo === "foto" ? !!foto : !!texto.trim();
 
   const pedir = async () => {
-    if (!texto.trim()) return;
+    if (!listo) return;
     setPensando(true);
     setError(null);
-    const res = await pedirACocina(modo === "idea" ? { accion: "receta", texto } : { accion: "importar", texto }, quien);
+    let res;
+    if (modo === "foto" && foto) {
+      const { url, error: fallo } = await subirFoto(foto, "recetas");
+      if (!url) { setPensando(false); return setError(fallo ?? "No se ha podido subir la foto."); }
+      res = await pedirACocina({ accion: "foto", foto_url: url, texto }, quien);
+    } else {
+      res = await pedirACocina(modo === "idea" ? { accion: "receta", texto } : { accion: "importar", texto }, quien);
+    }
     setPensando(false);
     if (!res.ok) return setError(res.error);
     const r = res.recetas?.[0];
@@ -163,14 +208,14 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
   return (
     <Hoja abierta={abierta} onCerrar={() => { if (!pensando) onCerrar(); }} titulo="Nueva receta">
       {pensando ? (
-        <Pensando texto={modo === "idea" ? "Cocinando la idea" : "Leyendo la receta"} />
+        <Pensando texto={modo === "idea" ? "Cocinando la idea" : modo === "foto" ? "Mirando vuestro plato" : "Leyendo la receta"} />
       ) : (
         <>
           <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-            {([["idea", "✨ Pedir una idea"], ["enlace", "🔗 Enlace o texto"]] as [Modo, string][]).map(([m, l]) => (
+            {MODOS.map(([m, l]) => (
               <button key={m} onClick={() => { setModo(m); setError(null); }}
                 style={{
-                  flex: 1, padding: "10px", borderRadius: 12, cursor: "pointer", fontSize: 13.5, fontWeight: modo === m ? 700 : 500,
+                  flex: 1, padding: "10px 4px", borderRadius: 12, cursor: "pointer", fontSize: 13.5, fontWeight: modo === m ? 700 : 500,
                   border: `1.5px solid ${modo === m ? VERDE : BCN.arenaOsc}`, background: modo === m ? `${VERDE}12` : "white",
                   color: modo === m ? VERDE : BCN.tinta,
                 }}>
@@ -179,7 +224,7 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
             ))}
           </div>
 
-          {modo === "idea" ? (
+          {modo === "idea" && (
             <>
               <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={3} autoFocus
                 placeholder="¿Qué os apetece? Ej: unas alubias con chorizo"
@@ -193,7 +238,9 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
                 ))}
               </div>
             </>
-          ) : (
+          )}
+
+          {modo === "enlace" && (
             <>
               <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={5} autoFocus
                 placeholder={"Pega el enlace de TikTok, Pinterest o una web…\n\n…o escribe la receta como te salga, que la IA la ordena."}
@@ -204,8 +251,37 @@ function HojaNueva({ abierta, quien, onCerrar, onLista }: {
             </>
           )}
 
+          {modo === "foto" && (
+            <>
+              <motion.button whileTap={{ scale: 0.98 }} onClick={() => refFoto.current?.click()}
+                style={{
+                  width: "100%", height: vista ? 200 : 130, borderRadius: 16, cursor: "pointer", overflow: "hidden", padding: 0,
+                  border: vista ? "none" : `1.5px dashed ${BCN.arenaOsc}`, background: vista ? BCN.arenaOsc : "white",
+                  display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6,
+                }}>
+                {vista ? (
+                  <img src={vista} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <>
+                    <span style={{ fontSize: 34 }}>📷</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: BCN.tinta }}>Hacer o elegir la foto</span>
+                  </>
+                )}
+              </motion.button>
+              <input ref={refFoto} type="file" accept="image/*" hidden
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) elegirFoto(f); e.target.value = ""; }} />
+              <input value={texto} onChange={(e) => setTexto(e.target.value)}
+                placeholder="¿Qué es o cómo lo hicisteis? (opcional)" style={{ ...estiloInput, margin: "10px 0 6px" }} />
+              <p style={{ fontSize: 12, color: BCN.humo, margin: "0 0 16px", lineHeight: 1.45 }}>
+                La IA reconoce el plato, escribe la receta y la guarda con vuestra foto y un ❤️.
+              </p>
+            </>
+          )}
+
           {error && <div style={{ marginBottom: 10 }}><Aviso>{error}</Aviso></div>}
-          <BotonIA onClick={pedir} disabled={!texto.trim()}>{modo === "idea" ? "Crear la receta" : "Leer la receta"}</BotonIA>
+          <BotonIA onClick={pedir} disabled={!listo}>
+            {modo === "idea" ? "Crear la receta" : modo === "foto" ? "Reconocer el plato" : "Leer la receta"}
+          </BotonIA>
         </>
       )}
     </Hoja>

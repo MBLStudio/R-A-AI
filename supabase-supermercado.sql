@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS super_recetas (
   nota             TEXT,
   veces            INTEGER NOT NULL DEFAULT 0,
   ultima_vez       DATE,
+  fijo             BOOLEAN NOT NULL DEFAULT false,   -- de los vuestros: que salga a menudo
+  dia_fijo         SMALLINT CHECK (dia_fijo IS NULL OR dia_fijo BETWEEN 1 AND 7),  -- 1 = lunes
   creada_por       TEXT,
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()
@@ -132,6 +134,11 @@ CREATE TABLE IF NOT EXISTS super_ajustes (
 INSERT INTO super_ajustes (clave, valor)
 VALUES ('equipos', '["fuegos", "microondas", "batidora", "picadora"]'::jsonb)
 ON CONFLICT (clave) DO NOTHING;
+
+-- Añadidos después (26/10/2026): platos fijos. Si la tabla ya existía, se añaden aquí.
+ALTER TABLE super_recetas ADD COLUMN IF NOT EXISTS fijo BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE super_recetas ADD COLUMN IF NOT EXISTS dia_fijo SMALLINT
+  CHECK (dia_fijo IS NULL OR dia_fijo BETWEEN 1 AND 7);
 
 CREATE INDEX IF NOT EXISTS idx_super_plan_fecha   ON super_plan(fecha);
 CREATE INDEX IF NOT EXISTS idx_super_lista_orden  ON super_lista(comprado, seccion, created_at);
