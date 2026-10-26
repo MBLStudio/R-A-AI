@@ -2,15 +2,14 @@
 
 Ideas pendientes de hablar y construir. Lo que se haga se tacha y se apunta en su módulo.
 
-## Módulo de comidas (25/10/2026)
+## Módulo de comidas (25/10/2026) · HECHO el 26/10/2026
 
-Idea de Alejandro. Aún no hay nada hecho.
+Hecho como **Supermercado**, dentro de Proyecto Barcelona (el antiguo módulo Comidas se ha quitado).
 
-- [ ] **Recetas e ideas:** recetas guardadas y propuestas nuevas.
-- [ ] **Planning semanal de comidas:** qué se come cada día de la semana.
-- [ ] **Lista de la compra:** a partir del planning, con las cantidades que hay que comprar y
-      eligiendo calidad-precio.
-- [ ] **Chat de nevera y despensa:** se le cuenta lo que hay en casa y propone platos chulos y
-      originales, no los simples de siempre.
+- [x] **Recetas e ideas:** recetario con ❤️ / 👍 / 👎, recetas de la IA y desde enlaces de TikTok, Pinterest o webs.
+- [x] **Planning semanal de comidas:** comida (tupper) y cena, planificado por la IA con vuestros horarios.
+- [x] **Lista de la compra:** a partir del menú, con las cantidades sumadas para los días que elijáis.
+- [x] **Chat de nevera y despensa:** "¿Qué cocino con lo que hay?", tres ideas originales.
+- [x] Extras: calorías y macros por plato y por persona, batch cooking y resumen semanal.
 
-Recordatorio en el Google Calendar de Alejandro el lunes 26 y el martes 27 de octubre a las 18:00.
+Pendiente: marcar horno y freidora de aire en la app cuando os mudéis.

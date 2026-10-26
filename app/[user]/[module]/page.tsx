@@ -18,7 +18,6 @@ interface Message {
 const SHARED_MODULES = ["plans", "viajes"];
 
 const MODULE_TITLES: Record<string, { title: string; icon: string }> = {
-  comidas: { title: "Comidas", icon: "🥗" },
   prompts: { title: "Prompts", icon: "✍️" },
   automatizaciones: { title: "Automatizaciones", icon: "⚙️" },
   proyectos: { title: "Proyectos", icon: "🚀" },

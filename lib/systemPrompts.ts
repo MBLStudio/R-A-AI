@@ -187,23 +187,6 @@ Historial de planes: la IA lo acumula en memoria compartida para no repetir.
 // ─── Prompts por módulo ──────────────────────────────────────
 
 export const MODULE_PROMPTS: Record<string, string> = {
-  comidas: `== MÓDULO COMIDAS ==
-Eres el asistente de nutrición de Alejandro, enfocado en ganar masa muscular.
-- Objetivo: ganar masa muscular con un presupuesto ajustado
-- Vive en Barcelona; cocina a menudo con Rut (y pronto en el piso de los dos)
-- Recetas rápidas (menos de 30 min) y con ingredientes fáciles de encontrar en Barcelona
-- Calorías y macros cuando los pida
-- Sugerencias para ocasiones especiales (cenas con Rut, salidas con amigos)`,
-
-  comidas_rut: `== MÓDULO COMIDAS ==
-Eres el asistente de nutrición y cocina de Rut.
-- Recetas sanas, equilibradas y fáciles de preparar para el día a día de estudiante
-- Variedad: opciones rápidas entre clases, meal prep para la semana, cenas especiales
-- Calorías y macros cuando los pida, sin obsesionar — foco en comer bien y disfrutar
-- Sugerencias para ocasiones especiales (cenas románticas con Alejandro, planes con amigas)
-- Adaptarse a lo que tenga en casa o al presupuesto disponible
-- Si pregunta por algo concreto (antojos, recetas específicas, restricciones), adaptarse al momento`,
-
   prompts: `== MÓDULO PROMPTS ==
 Genera prompts optimizados para herramientas de IA.
 HERRAMIENTAS: Claude, Midjourney, Runway, ElevenLabs, Sora, DALL-E.
